@@ -240,7 +240,8 @@ def calculate_score(questions, answers):
     
     for q in questions:
         user_ans = answers.get(q["number"])
-        if user_ans == q["correct"]:
+        # Check if question was answered AND if it's correct
+        if user_ans is not None and user_ans == q["correct"]:
             correct += 1
         else:
             # Both unanswered and incorrect answers are marked as wrong
