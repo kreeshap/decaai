@@ -318,7 +318,7 @@ def calculate_score(questions, answers):
 # Main app
 if not st.session_state.pdf_loaded:
     st.markdown('<div style="text-align: center; padding: 2rem;">', unsafe_allow_html=True)
-    st.markdown("# DECA Quiz Platform")
+    st.markdown("# DECA Quiz")
     st.markdown("### Upload your DECA exam PDF to get started")
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -340,7 +340,7 @@ if not st.session_state.pdf_loaded:
         
         st.success(f"✓ Loaded {num_questions} questions")
         if num_with_answers < num_questions:
-            st.warning(f"⚠️ Only {num_with_answers}/{num_questions} questions have answer keys")
+            st.warning(f" Only {num_with_answers}/{num_questions} questions have answer keys")
         else:
             st.success(f"✓ All {num_with_answers} questions have answer keys")
         
