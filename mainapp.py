@@ -148,7 +148,6 @@ def extract_questions_and_answers(pdf_file):
                 if re.match(r'^[A-D]\.\s', next_line):
                     break
                 if next_line and not re.match(r'^\d+\.', next_line):
-                    # Only skip if it's a pure copyright/footer line
                     if not (next_line.startswith('Copyright') or (next_line.startswith('Test') and 'EXAM' in next_line)):
                         q_text += " " + next_line
                 j += 1
@@ -177,7 +176,6 @@ def extract_questions_and_answers(pdf_file):
                         if re.match(r'^[A-D]\.\s', continuation) or re.match(r'^\d+\.', continuation):
                             break
                         if continuation:
-                            # Only skip if it's a pure copyright/footer line
                             if not (continuation.startswith('Copyright') or (continuation.startswith('Test') and 'EXAM' in continuation)):
                                 choice_text += " " + continuation
                         k += 1
@@ -193,7 +191,7 @@ def extract_questions_and_answers(pdf_file):
         
         i += 1
     
-    # Extract answer key and explanations
+    # Extract answer key and explanations - IMPROVED PARSING
     if answer_text:
         answer_lines = answer_text.split('\n')
         current_q_num = None
@@ -208,17 +206,18 @@ def extract_questions_and_answers(pdf_file):
             if line_stripped.startswith('Copyright') or (line_stripped.startswith('Test') and 'EXAM' in line_stripped):
                 continue
             
-            # Match answer line like "1. A"
-            answer_match = re.match(r'^(\d+)\.\s+([A-D])', line_stripped)
+            # Match answer line - more flexible regex
+            answer_match = re.match(r'^(\d+)\.\s+([A-D])(?:\s|$)', line_stripped)
             if answer_match:
+                # Save previous explanation before starting new one
                 if current_q_num and current_explanation:
                     explanations[current_q_num] = current_explanation.strip()
                 
                 current_q_num = int(answer_match.group(1))
                 answer_key[current_q_num] = answer_match.group(2)
                 current_explanation = ""
-            elif current_q_num and line_stripped and not re.match(r'^\d+\.', line_stripped):
-                # This is part of the explanation
+            elif current_q_num is not None and line_stripped and not re.match(r'^\d+\.\s+[A-D]', line_stripped):
+                # This is part of the explanation (not a new answer line)
                 if current_explanation:
                     current_explanation += " " + line_stripped
                 else:
