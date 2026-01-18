@@ -467,7 +467,7 @@ else:
     st.divider()
     
     # Navigation buttons
-    col1, col2, col3 = st.columns([1, 1, 1])
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
     
     with col1:
         if st.button("Previous", use_container_width=True, disabled=(current_idx == 0)):
@@ -478,15 +478,12 @@ else:
         st.markdown(f"<div style='text-align: center; padding: 0.5rem;'><strong>Question {current_idx + 1} out of {len(questions)}</strong></div>", unsafe_allow_html=True)
     
     with col3:
-        if current_idx == len(questions) - 1:
-            if st.button("Submit", use_container_width=True, type="primary"):
-                if len(st.session_state.user_answers) == len(questions):
-                    st.session_state.quiz_submitted = True
-                    st.session_state.show_results = True
-                    st.rerun()
-                else:
-                    st.error(f"Please answer all {len(questions)} questions before submitting.")
-        else:
-            if st.button("Next", use_container_width=True):
-                st.session_state.current_question += 1
-                st.rerun()
+        if st.button("Submit", use_container_width=True, type="primary"):
+            st.session_state.quiz_submitted = True
+            st.session_state.show_results = True
+            st.rerun()
+    
+    with col4:
+        if st.button("Next", use_container_width=True, disabled=(current_idx == len(questions) - 1)):
+            st.session_state.current_question += 1
+            st.rerun()
