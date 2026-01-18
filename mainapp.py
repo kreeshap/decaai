@@ -481,6 +481,34 @@ elif st.session_state.quiz_submitted:
             except:
                 current_index = None
         
+        # Custom styling for radio buttons to ensure text is visible
+        st.markdown("""
+            <style>
+            /* Make radio button labels dark and visible */
+            .stRadio > label {
+                color: #1f2937 !important;
+            }
+            .stRadio div[role="radiogroup"] label {
+                color: #1f2937 !important;
+                padding: 1rem;
+                background: white;
+                border: 2px solid #e5e7eb;
+                border-radius: 8px;
+                margin: 0.5rem 0;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            .stRadio div[role="radiogroup"] label:hover {
+                border-color: #9ca3af;
+                background: #f9fafb;
+            }
+            .stRadio div[role="radiogroup"] label[data-checked="true"] {
+                border-color: #333;
+                background: #f3f4f6;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+        
         choice_option = st.radio(
             "Select your answer:",
             options=['A', 'B', 'C', 'D'],
@@ -549,6 +577,34 @@ else:
             current_index = ['A', 'B', 'C', 'D'].index(selected)
         except:
             current_index = None
+    
+    # Custom styling for radio buttons to ensure text is visible
+    st.markdown("""
+        <style>
+        /* Make radio button labels dark and visible */
+        .stRadio > label {
+            color: #1f2937 !important;
+        }
+        .stRadio div[role="radiogroup"] label {
+            color: #1f2937 !important;
+            padding: 1rem;
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            margin: 0.5rem 0;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .stRadio div[role="radiogroup"] label:hover {
+            border-color: #9ca3af;
+            background: #f9fafb;
+        }
+        .stRadio div[role="radiogroup"] label[data-checked="true"] {
+            border-color: #333;
+            background: #f3f4f6;
+        }
+        </style>
+    """, unsafe_allow_html=True)
     
     choice_option = st.radio(
         "Select your answer:",
