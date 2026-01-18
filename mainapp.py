@@ -37,7 +37,7 @@ st.markdown("""
         .score-card {
             background: #f3f4f6;
             color: #333;
-            padding: 2rem;
+            padding: 1.5rem;
             border-radius: 12px;
             text-align: center;
             margin: 1rem 0;
