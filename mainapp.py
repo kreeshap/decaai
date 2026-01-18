@@ -91,6 +91,14 @@ if "pdf_loaded" not in st.session_state:
     st.session_state.pdf_loaded = False
 if "show_results" not in st.session_state:
     st.session_state.show_results = False
+if "quiz_started" not in st.session_state:
+    st.session_state.quiz_started = False
+if "start_question" not in st.session_state:
+    st.session_state.start_question = 1
+if "num_questions" not in st.session_state:
+    st.session_state.num_questions = None
+if "quiz_questions" not in st.session_state:
+    st.session_state.quiz_questions = []
 
 def extract_questions_and_answers(pdf_file):
     """Extract questions and answers from PDF"""
@@ -218,7 +226,7 @@ def extract_questions_and_answers(pdf_file):
     return questions
 
 def calculate_score(questions, answers):
-    """Calculate score and get wrong answers"""
+    """Calculate score and get wrong answers - unanswered questions count as wrong"""
     correct = 0
     wrong = []
     unanswered = 0
@@ -227,29 +235,30 @@ def calculate_score(questions, answers):
         user_ans = answers.get(q["number"])
         if user_ans == q["correct"]:
             correct += 1
-        elif user_ans is None:
-            # Track unanswered separately
-            unanswered += 1
-            wrong.append({
-                "number": q["number"],
-                "question": q["text"],
-                "your_answer": "Not answered",
-                "correct_answer": q["correct"],
-                "explanation": q["explanation"],
-                "choice_text": q["choices"].get(q["correct"], ""),
-                "is_unanswered": True
-            })
         else:
-            # Incorrect answer
-            wrong.append({
-                "number": q["number"],
-                "question": q["text"],
-                "your_answer": user_ans,
-                "correct_answer": q["correct"],
-                "explanation": q["explanation"],
-                "choice_text": q["choices"].get(q["correct"], ""),
-                "is_unanswered": False
-            })
+            # Both unanswered and incorrect answers are marked as wrong
+            if user_ans is None:
+                unanswered += 1
+                wrong.append({
+                    "number": q["number"],
+                    "question": q["text"],
+                    "your_answer": "Not answered",
+                    "correct_answer": q["correct"],
+                    "explanation": q["explanation"],
+                    "choice_text": q["choices"].get(q["correct"], ""),
+                    "is_unanswered": True
+                })
+            else:
+                # Incorrect answer
+                wrong.append({
+                    "number": q["number"],
+                    "question": q["text"],
+                    "your_answer": user_ans,
+                    "correct_answer": q["correct"],
+                    "explanation": q["explanation"],
+                    "choice_text": q["choices"].get(q["correct"], ""),
+                    "is_unanswered": False
+                })
     
     # Calculate score based on total questions (correct / total * 100)
     total = len(questions)
@@ -273,11 +282,70 @@ if not st.session_state.pdf_loaded:
             st.session_state.user_answers = {}
             st.session_state.quiz_submitted = False
             st.session_state.current_question = 0
+            st.session_state.quiz_started = False
         st.success(f"Loaded {len(st.session_state.questions)} questions")
         st.rerun()
 
+elif not st.session_state.quiz_started:
+    # Quiz configuration screen
+    st.markdown('<div style="text-align: center; padding: 2rem;">', unsafe_allow_html=True)
+    st.markdown("# Quiz Configuration")
+    st.markdown("### Customize your quiz")
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    total_questions = len(st.session_state.questions)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        start_q = st.number_input(
+            "Start from question:",
+            min_value=1,
+            max_value=total_questions,
+            value=1,
+            step=1
+        )
+    
+    with col2:
+        num_q = st.number_input(
+            "Number of questions:",
+            min_value=1,
+            max_value=total_questions - start_q + 1,
+            value=min(10, total_questions - start_q + 1),
+            step=1
+        )
+    
+    st.divider()
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("Start Quiz", use_container_width=True, type="primary"):
+            st.session_state.start_question = start_q
+            st.session_state.num_questions = num_q
+            # Filter questions for this quiz
+            all_questions = st.session_state.questions
+            st.session_state.quiz_questions = [q for q in all_questions if start_q <= q["number"] <= start_q + num_q - 1]
+            st.session_state.quiz_submitted = False
+            st.session_state.show_results = False
+            st.session_state.current_question = 0
+            st.session_state.quiz_started = True
+            st.session_state.user_answers = {}
+            st.rerun()
+    
+    with col2:
+        if st.button("Upload Different PDF", use_container_width=True):
+            st.session_state.pdf_loaded = False
+            st.session_state.questions = []
+            st.session_state.user_answers = {}
+            st.session_state.current_question = 0
+            st.session_state.quiz_submitted = False
+            st.session_state.show_results = False
+            st.session_state.quiz_started = False
+            st.rerun()
+
 elif st.session_state.quiz_submitted:
-    questions = st.session_state.questions
+    questions = st.session_state.quiz_questions
     score, wrong_answers, unanswered_count = calculate_score(questions, st.session_state.user_answers)
     
     if st.session_state.show_results:
@@ -362,18 +430,17 @@ elif st.session_state.quiz_submitted:
                 st.rerun()
         
         with col3:
-            if st.button("Upload New PDF", use_container_width=True):
-                st.session_state.pdf_loaded = False
-                st.session_state.questions = []
+            if st.button("New Quiz", use_container_width=True):
+                st.session_state.quiz_started = False
+                st.session_state.quiz_submitted = False
                 st.session_state.user_answers = {}
                 st.session_state.current_question = 0
-                st.session_state.quiz_submitted = False
                 st.session_state.show_results = False
                 st.rerun()
     
     else:
         # Show quiz with results banner
-        questions = st.session_state.questions
+        questions = st.session_state.quiz_questions
         current_idx = st.session_state.current_question
         q = questions[current_idx]
         
@@ -447,7 +514,7 @@ elif st.session_state.quiz_submitted:
 
 else:
     # Quiz interface
-    questions = st.session_state.questions
+    questions = st.session_state.quiz_questions
     current_idx = st.session_state.current_question
     q = questions[current_idx]
     
