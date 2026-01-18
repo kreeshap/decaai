@@ -101,12 +101,6 @@ def extract_questions_and_answers(pdf_file):
     with pdfplumber.open(pdf_file) as pdf:
         text = "\n".join([page.extract_text() or "" for page in pdf.pages])
     
-    # Remove copyright notices and headers/footers
-    text = re.sub(r'Copyright.*?Columbus, Ohio', '', text, flags=re.DOTALL)
-    text = re.sub(r'Test \d+.*?EXAM.*?\n', '', text, flags=re.DOTALL)
-    text = re.sub(r'INSTRUCTIONS:.*?testing monitor\..*?\n', '', text, flags=re.DOTALL)
-    text = re.sub(r'CAUTION:.*?disqualification.*?\n', '', text, flags=re.DOTALL)
-    
     # Split by "KEY" to separate questions from answer key
     parts = text.split("KEY")
     questions_text = parts[0] if len(parts) > 0 else text
@@ -118,8 +112,8 @@ def extract_questions_and_answers(pdf_file):
     while i < len(lines):
         line = lines[i].strip()
         
-        # Skip empty lines and copyright/footer lines
-        if not line or 'Copyright' in line or 'Test' in line or line.startswith('Booklet'):
+        # Skip lines that are purely copyright/footer info
+        if not line or line.startswith('Copyright') or (line.startswith('Test') and 'EXAM' in line) or line.startswith('Booklet'):
             i += 1
             continue
         
@@ -135,8 +129,10 @@ def extract_questions_and_answers(pdf_file):
                 next_line = lines[j].strip()
                 if re.match(r'^[A-D]\.\s', next_line):
                     break
-                if next_line and not re.match(r'^\d+\.', next_line) and 'Copyright' not in next_line and 'Test' not in next_line:
-                    q_text += " " + next_line
+                if next_line and not re.match(r'^\d+\.', next_line):
+                    # Only skip if it's a pure copyright/footer line
+                    if not (next_line.startswith('Copyright') or (next_line.startswith('Test') and 'EXAM' in next_line)):
+                        q_text += " " + next_line
                 j += 1
             
             current_q = {
@@ -162,8 +158,10 @@ def extract_questions_and_answers(pdf_file):
                         continuation = lines[k].strip()
                         if re.match(r'^[A-D]\.\s', continuation) or re.match(r'^\d+\.', continuation):
                             break
-                        if continuation and 'Copyright' not in continuation and 'Test' not in continuation:
-                            choice_text += " " + continuation
+                        if continuation:
+                            # Only skip if it's a pure copyright/footer line
+                            if not (continuation.startswith('Copyright') or (continuation.startswith('Test') and 'EXAM' in continuation)):
+                                choice_text += " " + continuation
                         k += 1
                     
                     current_q["choices"][choice_letter] = choice_text.strip()
@@ -185,7 +183,11 @@ def extract_questions_and_answers(pdf_file):
         
         for line in answer_lines:
             line_stripped = line.strip()
-            if not line_stripped or 'Copyright' in line_stripped or 'Test' in line_stripped:
+            if not line_stripped:
+                continue
+            
+            # Skip copyright/footer lines
+            if line_stripped.startswith('Copyright') or (line_stripped.startswith('Test') and 'EXAM' in line_stripped):
                 continue
             
             # Match answer line like "1. A"
@@ -197,7 +199,7 @@ def extract_questions_and_answers(pdf_file):
                 current_q_num = int(answer_match.group(1))
                 answer_key[current_q_num] = answer_match.group(2)
                 current_explanation = ""
-            elif current_q_num and line_stripped and not re.match(r'^\d+\.', line_stripped) and 'Copyright' not in line_stripped:
+            elif current_q_num and line_stripped and not re.match(r'^\d+\.', line_stripped):
                 # This is part of the explanation
                 if current_explanation:
                     current_explanation += " " + line_stripped
