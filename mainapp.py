@@ -191,7 +191,7 @@ def extract_questions_and_answers(pdf_file):
         
         i += 1
     
-    # Extract answer key and explanations - IMPROVED PARSING
+    # Extract answer key and explanations - FIXED VERSION
     if answer_text:
         answer_lines = answer_text.split('\n')
         current_q_num = None
@@ -206,8 +206,9 @@ def extract_questions_and_answers(pdf_file):
             if line_stripped.startswith('Copyright') or (line_stripped.startswith('Test') and 'EXAM' in line_stripped):
                 continue
             
-            # Match answer line - more flexible regex
-            answer_match = re.match(r'^(\d+)\.\s+([A-D])(?:\s|$)', line_stripped)
+            # Match answer line - capture answer and any text after it
+            # Format: "1. A" or "1. A Heat and lighting costs..."
+            answer_match = re.match(r'^(\d+)\.\s+([A-D])(?:\s+(.*))?$', line_stripped)
             if answer_match:
                 # Save previous explanation before starting new one
                 if current_q_num and current_explanation:
@@ -215,13 +216,18 @@ def extract_questions_and_answers(pdf_file):
                 
                 current_q_num = int(answer_match.group(1))
                 answer_key[current_q_num] = answer_match.group(2)
-                current_explanation = ""
-            elif current_q_num is not None and line_stripped and not re.match(r'^\d+\.\s+[A-D]', line_stripped):
-                # This is part of the explanation (not a new answer line)
-                if current_explanation:
-                    current_explanation += " " + line_stripped
-                else:
-                    current_explanation = line_stripped
+                
+                # Start explanation with any text on the same line as the answer
+                explanation_start = answer_match.group(3)
+                current_explanation = explanation_start if explanation_start else ""
+            elif current_q_num is not None and line_stripped:
+                # Check if this is a new answer line
+                if not re.match(r'^\d+\.\s+[A-D]', line_stripped):
+                    # This is part of the explanation
+                    if current_explanation:
+                        current_explanation += " " + line_stripped
+                    else:
+                        current_explanation = line_stripped
         
         # Don't forget the last explanation
         if current_q_num and current_explanation:
