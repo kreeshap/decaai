@@ -119,15 +119,16 @@ def extract_questions_and_answers(pdf_file):
     with pdfplumber.open(pdf_file) as pdf:
         text = "\n".join([page.extract_text() or "" for page in pdf.pages])
     
-    # Split by "KEY" to separate questions from answer key
-    # Look for the pattern "KEY" followed by "Test Number"
-    key_split = re.split(r'KEY\s*\n\s*Test Number', text)
+    # Split by looking for the answer key section
+    # The answer key appears after pages with "EXAM—KEY" or "EXAM-KEY" in the header
+    key_match = re.search(r'EXAM[—-]KEY\s+\d+', text)
     
-    if len(key_split) > 1:
-        questions_text = key_split[0]
-        answer_text = "Test Number" + key_split[1]
+    if key_match:
+        # Split at the first occurrence of EXAM—KEY or EXAM-KEY
+        questions_text = text[:key_match.start()]
+        answer_text = text[key_match.start():]
     else:
-        # Fallback to simple KEY split
+        # Fallback: try splitting by "KEY" alone
         parts = text.split("KEY")
         questions_text = parts[0] if len(parts) > 0 else text
         answer_text = parts[1] if len(parts) > 1 else ""
