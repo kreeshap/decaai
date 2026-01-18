@@ -241,7 +241,7 @@ if not st.session_state.pdf_loaded:
     uploaded_file = st.file_uploader("Upload PDF Exam", type=["pdf"])
     
     if uploaded_file:
-        with st.spinner("⏳ Parsing PDF..."):
+        with st.spinner("Parsing PDF..."):
             st.session_state.questions = extract_questions_and_answers(uploaded_file)
             st.session_state.pdf_loaded = True
             st.session_state.user_answers = {}
@@ -297,18 +297,17 @@ elif st.session_state.quiz_submitted:
                 st.markdown(f"**Question {wrong['number']}:** {wrong['question']}")
                 st.divider()
                 
-                st.markdown(f'<div class="wrong-answer-box"><strong> Your Answer:</strong> {wrong["your_answer"]}</div>', unsafe_allow_html=True)
-                st.markdown(f'<div style="background: #f0fdf4; border-left: 4px solid #10b981; padding: 1rem; border-radius: 8px; margin: 0.5rem 0;"><strong> Correct Answer:</strong> {wrong["correct_answer"]}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="wrong-answer-box"><strong>Your Answer:</strong> {wrong["your_answer"]}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="background: #f0fdf4; border-left: 4px solid #10b981; padding: 1rem; border-radius: 8px; margin: 0.5rem 0;"><strong>Correct Answer:</strong> {wrong["correct_answer"]}</div>', unsafe_allow_html=True)
                 
-                st.markdown(f'<div class="explanation-box"><strong>📖 Explanation:</strong> {wrong["explanation"]}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="explanation-box"><strong>Explanation:</strong> {wrong["explanation"]}</div>', unsafe_allow_html=True)
     else:
         st.markdown("""
             <div class="perfect-score">
-                <div style="font-size: 4rem;">🎉</div>
-                <h2 style="color: #10b981; margin: 1rem 0;">Perfect Score!</h2>
-                <p style="color: #666; font-size: 1.1rem;">You got all {count} questions correct!</p>
+                <div style="font-size: 4rem;">Perfect Score!</div>
+                <h2 style="color: #10b981; margin: 1rem 0;">You got all questions correct!</h2>
             </div>
-        """.format(count=len(questions)), unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
     
     st.divider()
     
@@ -360,17 +359,13 @@ else:
         choice_text = q['choices'].get(letter, '')
         is_selected = selected == letter
         
-        col1, col2 = st.columns[0.1, 0.9]
-        with col1:
-            pass  # Radio styling handled by button
-        with col2:
-            if st.button(
-                f"{letter} - {choice_text}",
-                key=f"choice_{q['number']}_{letter}",
-                use_container_width=True,
-            ):
-                st.session_state.user_answers[q["number"]] = letter
-                st.rerun()
+        if st.button(
+            f"{letter} - {choice_text}",
+            key=f"choice_{q['number']}_{letter}",
+            use_container_width=True,
+        ):
+            st.session_state.user_answers[q["number"]] = letter
+            st.rerun()
     
     st.markdown("</div>", unsafe_allow_html=True)
     
@@ -380,7 +375,7 @@ else:
     col1, col2, col3 = st.columns([1, 1, 1])
     
     with col1:
-        if st.button("⬅Previous", use_container_width=True, disabled=(current_idx == 0)):
+        if st.button("Previous", use_container_width=True, disabled=(current_idx == 0)):
             st.session_state.current_question -= 1
             st.rerun()
     
