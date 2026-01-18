@@ -335,13 +335,10 @@ else:
     current_idx = st.session_state.current_question
     q = questions[current_idx]
     
-    # Header card with progress
+    # Progress bar
     st.markdown(f"""
-        <div class="progress-header">
-            <h2>Question {current_idx + 1} out of {len(questions)}</h2>
-            <div style="width: 100%; background: #e5e7eb; border-radius: 10px; height: 8px; margin: 1rem 0; overflow: hidden;">
-                <div style="width: {((current_idx + 1) / len(questions)) * 100}%; background: #333; height: 100%; border-radius: 10px;"></div>
-            </div>
+        <div style="width: 100%; background: #e5e7eb; border-radius: 10px; height: 8px; overflow: hidden; margin-bottom: 2rem;">
+            <div style="width: {((current_idx + 1) / len(questions)) * 100}%; background: #333; height: 100%; border-radius: 10px;"></div>
         </div>
     """, unsafe_allow_html=True)
     
