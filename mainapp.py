@@ -64,6 +64,14 @@ st.markdown("""
             margin: 1rem 0;
             color: #1f2937;
         }
+        .correct-answer-box {
+            background: #ecfdf5;
+            border-left: 4px solid #10b981;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 0.5rem 0;
+            color: #1f2937;
+        }
         .explanation-box {
             background: #f0f9ff;
             border-left: 4px solid #333;
@@ -76,11 +84,6 @@ st.markdown("""
         .perfect-score {
             text-align: center;
             padding: 3rem 1rem;
-            color: #1f2937;
-        }
-        /* Ensure all text in results section is dark */
-        .stExpander, .stExpander p, .stExpander div {
-            color: #1f2937 !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -360,7 +363,7 @@ elif st.session_state.quiz_submitted:
         # Score display
         st.markdown(f"""
             <div style="text-align: center;">
-                <h1 style="color: #1f2937;">Quiz Results</h1>
+                <h1>Quiz Results</h1>
             </div>
         """, unsafe_allow_html=True)
         
@@ -402,23 +405,23 @@ elif st.session_state.quiz_submitted:
         
         # Wrong answers with explanations
         if wrong_answers:
-            st.markdown('<h2 style="color: #1f2937;">Review Your Mistakes</h2>', unsafe_allow_html=True)
+            st.markdown('<h2 style="color: #000000;">Review Your Mistakes</h2>', unsafe_allow_html=True)
             
             for idx, wrong in enumerate(wrong_answers, 1):
                 with st.expander(f"Question {wrong['number']}: {wrong['question'][:70]}...", expanded=(idx==1 if len(wrong_answers)==1 else False)):
-                    st.markdown(f"<p style='color: #1f2937;'><strong>Question {wrong['number']}:</strong> {wrong['question']}</p>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='color: #000000;'><strong>Question {wrong['number']}:</strong> {wrong['question']}</p>", unsafe_allow_html=True)
                     st.divider()
                     
                     st.markdown(f'<div class="wrong-answer-box"><strong>Your Answer:</strong> {wrong["your_answer"]}</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div style="background: #ecfdf5; border-left: 4px solid #10b981; padding: 1rem; border-radius: 8px; margin: 0.5rem 0; color: #1f2937;"><strong>Correct Answer:</strong> {wrong["correct_answer"]}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="background: #ecfdf5; border-left: 4px solid #10b981; padding: 1rem; border-radius: 8px; margin: 0.5rem 0; color: #000000;"><strong>Correct Answer:</strong> {wrong["correct_answer"]}</div>', unsafe_allow_html=True)
                     
                     st.markdown(f'<div class="explanation-box"><strong>Explanation:</strong> {wrong["explanation"]}</div>', unsafe_allow_html=True)
         else:
             st.markdown("""
                 <div class="perfect-score">
-                    <div style="font-size: 4rem; color: #1f2937;">🎉</div>
+                    <div style="font-size: 4rem; color: #000000;">🎉</div>
                     <h2 style="color: #065f46; margin: 1rem 0;">Perfect Score!</h2>
-                    <p style="color: #1f2937;">You got all questions correct!</p>
+                    <p style="color: #000000;">You got all questions correct!</p>
                 </div>
             """, unsafe_allow_html=True)
         
