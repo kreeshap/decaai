@@ -120,18 +120,20 @@ def extract_questions_and_answers(pdf_file):
         text = "\n".join([page.extract_text() or "" for page in pdf.pages])
     
     # Split by looking for the answer key section
-    # The answer key appears after pages with "EXAM—KEY" or "EXAM-KEY" in the header
-    key_match = re.search(r'EXAM[—-]KEY\s+\d+', text)
+    # The answer key appears on pages with "EXAM—KEY" or "EXAM-KEY" in the header
+    key_match = re.search(r'EXAM[—\-]KEY\s+\d+', text)
     
     if key_match:
         # Split at the first occurrence of EXAM—KEY or EXAM-KEY
         questions_text = text[:key_match.start()]
         answer_text = text[key_match.start():]
+        print(f"Found answer key at position {key_match.start()}")
     else:
-        # Fallback: try splitting by "KEY" alone
+        # Fallback: try splitting by "KEY"
         parts = text.split("KEY")
         questions_text = parts[0] if len(parts) > 0 else text
         answer_text = parts[1] if len(parts) > 1 else ""
+        print(f"Using fallback KEY split, found {len(parts)} parts")
     
     lines = questions_text.split('\n')
     
@@ -200,25 +202,37 @@ def extract_questions_and_answers(pdf_file):
         
         i += 1
     
-    # Extract answer key and explanations - IMPROVED VERSION
+    # Extract answer key and explanations
     if answer_text:
         answer_lines = answer_text.split('\n')
         current_q_num = None
         current_explanation = ""
+        skip_until_next_question = False
         
         for line in answer_lines:
             line_stripped = line.strip()
             if not line_stripped:
                 continue
             
-            # Skip copyright/footer/source lines
+            # Skip copyright/footer/header lines
             if (line_stripped.startswith('Copyright') or 
-                (line_stripped.startswith('Test') and 'EXAM' in line_stripped) or
-                line_stripped.startswith('SOURCE:')):
+                (line_stripped.startswith('Test') and 'EXAM' in line_stripped)):
                 continue
             
+            # Skip SOURCE lines completely
+            if line_stripped.startswith('SOURCE:'):
+                skip_until_next_question = True
+                continue
+            
+            # If we're in a SOURCE section, skip until we hit a new question number
+            if skip_until_next_question:
+                # Check if this is a new question
+                if re.match(r'^\d+\.\s+[A-D]', line_stripped):
+                    skip_until_next_question = False
+                else:
+                    continue
+            
             # Match answer line - capture answer and any text after it
-            # Format: "1. A" or "1. A Heat and lighting costs..."
             answer_match = re.match(r'^(\d+)\.\s+([A-D])(?:\s+(.*))?$', line_stripped)
             if answer_match:
                 # Save previous explanation before starting new one
@@ -231,7 +245,8 @@ def extract_questions_and_answers(pdf_file):
                 # Start explanation with any text on the same line as the answer
                 explanation_start = answer_match.group(3)
                 current_explanation = explanation_start if explanation_start else ""
-            elif current_q_num is not None and line_stripped:
+                skip_until_next_question = False
+            elif current_q_num is not None and line_stripped and not skip_until_next_question:
                 # Check if this is a new answer line
                 if not re.match(r'^\d+\.\s+[A-D]', line_stripped):
                     # This is part of the explanation
@@ -245,20 +260,16 @@ def extract_questions_and_answers(pdf_file):
             explanations[current_q_num] = current_explanation.strip()
     
     # Debug: Print what we found
-    print(f"Found {len(questions)} questions")
-    print(f"Found {len(answer_key)} answers in key")
-    print(f"Found {len(explanations)} explanations")
+    print(f"✓ Found {len(questions)} questions")
+    print(f"✓ Found {len(answer_key)} answers in key")
+    print(f"✓ Found {len(explanations)} explanations")
     if len(answer_key) > 0:
-        print(f"Sample answers: {list(answer_key.items())[:5]}")
+        print(f"Sample answers: Q1={answer_key.get(1)}, Q2={answer_key.get(2)}, Q3={answer_key.get(3)}")
     
     # Assign answers and explanations to questions
     for q in questions:
         q["correct"] = answer_key.get(q["number"], None)
         q["explanation"] = explanations.get(q["number"], "No explanation available.")
-        
-        # Debug first few questions
-        if q["number"] <= 3:
-            print(f"Q{q['number']}: correct={q['correct']}, has_explanation={len(q['explanation']) > 25}")
     
     return questions
 
