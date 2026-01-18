@@ -120,9 +120,17 @@ def extract_questions_and_answers(pdf_file):
         text = "\n".join([page.extract_text() or "" for page in pdf.pages])
     
     # Split by "KEY" to separate questions from answer key
-    parts = text.split("KEY")
-    questions_text = parts[0] if len(parts) > 0 else text
-    answer_text = parts[1] if len(parts) > 1 else ""
+    # Look for the pattern "KEY" followed by "Test Number"
+    key_split = re.split(r'KEY\s*\n\s*Test Number', text)
+    
+    if len(key_split) > 1:
+        questions_text = key_split[0]
+        answer_text = "Test Number" + key_split[1]
+    else:
+        # Fallback to simple KEY split
+        parts = text.split("KEY")
+        questions_text = parts[0] if len(parts) > 0 else text
+        answer_text = parts[1] if len(parts) > 1 else ""
     
     lines = questions_text.split('\n')
     
@@ -191,7 +199,7 @@ def extract_questions_and_answers(pdf_file):
         
         i += 1
     
-    # Extract answer key and explanations - FIXED VERSION
+    # Extract answer key and explanations - IMPROVED VERSION
     if answer_text:
         answer_lines = answer_text.split('\n')
         current_q_num = None
@@ -202,8 +210,10 @@ def extract_questions_and_answers(pdf_file):
             if not line_stripped:
                 continue
             
-            # Skip copyright/footer lines
-            if line_stripped.startswith('Copyright') or (line_stripped.startswith('Test') and 'EXAM' in line_stripped):
+            # Skip copyright/footer/source lines
+            if (line_stripped.startswith('Copyright') or 
+                (line_stripped.startswith('Test') and 'EXAM' in line_stripped) or
+                line_stripped.startswith('SOURCE:')):
                 continue
             
             # Match answer line - capture answer and any text after it
@@ -211,7 +221,7 @@ def extract_questions_and_answers(pdf_file):
             answer_match = re.match(r'^(\d+)\.\s+([A-D])(?:\s+(.*))?$', line_stripped)
             if answer_match:
                 # Save previous explanation before starting new one
-                if current_q_num and current_explanation:
+                if current_q_num is not None and current_explanation:
                     explanations[current_q_num] = current_explanation.strip()
                 
                 current_q_num = int(answer_match.group(1))
@@ -230,13 +240,24 @@ def extract_questions_and_answers(pdf_file):
                         current_explanation = line_stripped
         
         # Don't forget the last explanation
-        if current_q_num and current_explanation:
+        if current_q_num is not None and current_explanation:
             explanations[current_q_num] = current_explanation.strip()
+    
+    # Debug: Print what we found
+    print(f"Found {len(questions)} questions")
+    print(f"Found {len(answer_key)} answers in key")
+    print(f"Found {len(explanations)} explanations")
+    if len(answer_key) > 0:
+        print(f"Sample answers: {list(answer_key.items())[:5]}")
     
     # Assign answers and explanations to questions
     for q in questions:
         q["correct"] = answer_key.get(q["number"], None)
         q["explanation"] = explanations.get(q["number"], "No explanation available.")
+        
+        # Debug first few questions
+        if q["number"] <= 3:
+            print(f"Q{q['number']}: correct={q['correct']}, has_explanation={len(q['explanation']) > 25}")
     
     return questions
 
@@ -261,7 +282,7 @@ def calculate_score(questions, answers):
                     "your_answer": "Not answered",
                     "correct_answer": q["correct"],
                     "explanation": q["explanation"],
-                    "choice_text": q["choices"].get(q["correct"], ""),
+                    "choice_text": q["choices"].get(q["correct"], "") if q["correct"] else "",
                     "is_unanswered": True
                 })
             else:
@@ -272,7 +293,7 @@ def calculate_score(questions, answers):
                     "your_answer": user_ans,
                     "correct_answer": q["correct"],
                     "explanation": q["explanation"],
-                    "choice_text": q["choices"].get(q["correct"], ""),
+                    "choice_text": q["choices"].get(q["correct"], "") if q["correct"] else "",
                     "is_unanswered": False
                 })
     
@@ -418,7 +439,11 @@ elif st.session_state.quiz_submitted:
                     st.divider()
                     
                     st.markdown(f'<div class="wrong-answer-box"><strong>Your Answer:</strong> {wrong["your_answer"]}</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="correct-answer-box"><strong>Correct Answer:</strong> {wrong["correct_answer"]}</div>', unsafe_allow_html=True)
+                    
+                    if wrong["correct_answer"]:
+                        st.markdown(f'<div class="correct-answer-box"><strong>Correct Answer:</strong> {wrong["correct_answer"]} - {wrong["choice_text"]}</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="correct-answer-box"><strong>Correct Answer:</strong> Not available in answer key</div>', unsafe_allow_html=True)
                     
                     st.markdown(f'<div class="explanation-box"><strong>Explanation:</strong> {wrong["explanation"]}</div>', unsafe_allow_html=True)
         else:
