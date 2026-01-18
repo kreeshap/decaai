@@ -73,17 +73,14 @@ st.markdown("""
             font-size: 0.95rem;
             color: #1f2937;
         }
-        .correct-answer-box {
-            background: #ecfdf5;
-            border-left: 4px solid #10b981;
-            padding: 1rem;
-            border-radius: 8px;
-            margin: 0.5rem 0;
-            color: #1f2937;
-        }
         .perfect-score {
             text-align: center;
             padding: 3rem 1rem;
+            color: #1f2937;
+        }
+        /* Ensure all text in results section is dark */
+        .stExpander, .stExpander p, .stExpander div {
+            color: #1f2937 !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -242,36 +239,33 @@ def calculate_score(questions, answers):
     unanswered = 0
     
     for q in questions:
-        # Use a unique key for each question in the quiz (use index in quiz_questions)
-        quiz_idx = questions.index(q)
-        user_ans = answers.get(quiz_idx)
-        
-        if user_ans is None:
-            # Question was not answered
-            unanswered += 1
-            wrong.append({
-                "number": q["number"],
-                "question": q["text"],
-                "your_answer": "Not answered",
-                "correct_answer": q["correct"],
-                "explanation": q["explanation"],
-                "choice_text": q["choices"].get(q["correct"], ""),
-                "is_unanswered": True
-            })
-        elif user_ans == q["correct"]:
-            # Correct answer
+        user_ans = answers.get(q["number"])
+        if user_ans == q["correct"]:
             correct += 1
         else:
-            # Incorrect answer
-            wrong.append({
-                "number": q["number"],
-                "question": q["text"],
-                "your_answer": user_ans,
-                "correct_answer": q["correct"],
-                "explanation": q["explanation"],
-                "choice_text": q["choices"].get(q["correct"], ""),
-                "is_unanswered": False
-            })
+            # Both unanswered and incorrect answers are marked as wrong
+            if user_ans is None:
+                unanswered += 1
+                wrong.append({
+                    "number": q["number"],
+                    "question": q["text"],
+                    "your_answer": "Not answered",
+                    "correct_answer": q["correct"],
+                    "explanation": q["explanation"],
+                    "choice_text": q["choices"].get(q["correct"], ""),
+                    "is_unanswered": True
+                })
+            else:
+                # Incorrect answer
+                wrong.append({
+                    "number": q["number"],
+                    "question": q["text"],
+                    "your_answer": user_ans,
+                    "correct_answer": q["correct"],
+                    "explanation": q["explanation"],
+                    "choice_text": q["choices"].get(q["correct"], ""),
+                    "is_unanswered": False
+                })
     
     # Calculate score based on total questions (correct / total * 100)
     total = len(questions)
@@ -336,11 +330,9 @@ elif not st.session_state.quiz_started:
         if st.button("Start Quiz", use_container_width=True, type="primary"):
             st.session_state.start_question = start_q
             st.session_state.num_questions = num_q
-            # Filter questions by index position (not by question number)
+            # Filter questions for this quiz
             all_questions = st.session_state.questions
-            start_idx = start_q - 1  # Convert to 0-indexed
-            end_idx = start_idx + num_q
-            st.session_state.quiz_questions = all_questions[start_idx:end_idx]
+            st.session_state.quiz_questions = [q for q in all_questions if start_q <= q["number"] <= start_q + num_q - 1]
             st.session_state.quiz_submitted = False
             st.session_state.show_results = False
             st.session_state.current_question = 0
@@ -367,7 +359,7 @@ elif st.session_state.quiz_submitted:
         # Score display
         st.markdown(f"""
             <div style="text-align: center;">
-                <h1>Quiz Results</h1>
+                <h1 style="color: #1f2937;">Quiz Results</h1>
             </div>
         """, unsafe_allow_html=True)
         
@@ -409,23 +401,23 @@ elif st.session_state.quiz_submitted:
         
         # Wrong answers with explanations
         if wrong_answers:
-            st.subheader("Review Your Mistakes")
+            st.markdown('<h2 style="color: #1f2937;">Review Your Mistakes</h2>', unsafe_allow_html=True)
             
             for idx, wrong in enumerate(wrong_answers, 1):
                 with st.expander(f"Question {wrong['number']}: {wrong['question'][:70]}...", expanded=(idx==1 if len(wrong_answers)==1 else False)):
-                    st.markdown(f"**Question {wrong['number']}:** {wrong['question']}")
+                    st.markdown(f"<p style='color: #1f2937;'><strong>Question {wrong['number']}:</strong> {wrong['question']}</p>", unsafe_allow_html=True)
                     st.divider()
                     
                     st.markdown(f'<div class="wrong-answer-box"><strong>Your Answer:</strong> {wrong["your_answer"]}</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="correct-answer-box"><strong>Correct Answer:</strong> {wrong["correct_answer"]}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="background: #ecfdf5; border-left: 4px solid #10b981; padding: 1rem; border-radius: 8px; margin: 0.5rem 0; color: #1f2937;"><strong>Correct Answer:</strong> {wrong["correct_answer"]}</div>', unsafe_allow_html=True)
                     
                     st.markdown(f'<div class="explanation-box"><strong>Explanation:</strong> {wrong["explanation"]}</div>', unsafe_allow_html=True)
         else:
             st.markdown("""
                 <div class="perfect-score">
-                    <div style="font-size: 4rem;">🎉</div>
+                    <div style="font-size: 4rem; color: #1f2937;">🎉</div>
                     <h2 style="color: #065f46; margin: 1rem 0;">Perfect Score!</h2>
-                    <p>You got all questions correct!</p>
+                    <p style="color: #1f2937;">You got all questions correct!</p>
                 </div>
             """, unsafe_allow_html=True)
         
@@ -481,7 +473,7 @@ elif st.session_state.quiz_submitted:
         """, unsafe_allow_html=True)
         
         # Answer options
-        selected = st.session_state.user_answers.get(current_idx)
+        selected = st.session_state.user_answers.get(q["number"])
         
         # Get index of currently selected answer
         current_index = None
@@ -491,45 +483,17 @@ elif st.session_state.quiz_submitted:
             except:
                 current_index = None
         
-        # Custom styling for radio buttons to ensure text is visible
-        st.markdown("""
-            <style>
-            /* Make radio button labels dark and visible */
-            .stRadio > label {
-                color: #1f2937 !important;
-            }
-            .stRadio div[role="radiogroup"] label {
-                color: #1f2937 !important;
-                padding: 1rem;
-                background: white;
-                border: 2px solid #e5e7eb;
-                border-radius: 8px;
-                margin: 0.5rem 0;
-                cursor: pointer;
-                transition: all 0.2s;
-            }
-            .stRadio div[role="radiogroup"] label:hover {
-                border-color: #9ca3af;
-                background: #f9fafb;
-            }
-            .stRadio div[role="radiogroup"] label[data-checked="true"] {
-                border-color: #333;
-                background: #f3f4f6;
-            }
-            </style>
-        """, unsafe_allow_html=True)
-        
         choice_option = st.radio(
             "Select your answer:",
             options=['A', 'B', 'C', 'D'],
             format_func=lambda x: f"{x} - {q['choices'].get(x, '')}",
             index=current_index,
-            key=f"choice_{current_idx}",
+            key=f"choice_{q['number']}",
             label_visibility="collapsed"
         )
         
         if choice_option:
-            st.session_state.user_answers[current_idx] = choice_option
+            st.session_state.user_answers[q["number"]] = choice_option
         
         st.markdown("</div>", unsafe_allow_html=True)
         
@@ -578,7 +542,7 @@ else:
     """, unsafe_allow_html=True)
     
     # Answer options
-    selected = st.session_state.user_answers.get(current_idx)
+    selected = st.session_state.user_answers.get(q["number"])
     
     # Get index of currently selected answer
     current_index = None
@@ -588,45 +552,17 @@ else:
         except:
             current_index = None
     
-    # Custom styling for radio buttons to ensure text is visible
-    st.markdown("""
-        <style>
-        /* Make radio button labels dark and visible */
-        .stRadio > label {
-            color: #1f2937 !important;
-        }
-        .stRadio div[role="radiogroup"] label {
-            color: #1f2937 !important;
-            padding: 1rem;
-            background: white;
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            margin: 0.5rem 0;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .stRadio div[role="radiogroup"] label:hover {
-            border-color: #9ca3af;
-            background: #f9fafb;
-        }
-        .stRadio div[role="radiogroup"] label[data-checked="true"] {
-            border-color: #333;
-            background: #f3f4f6;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-    
     choice_option = st.radio(
         "Select your answer:",
         options=['A', 'B', 'C', 'D'],
         format_func=lambda x: f"{x} - {q['choices'].get(x, '')}",
         index=current_index,
-        key=f"choice_{current_idx}",
+        key=f"choice_{q['number']}",
         label_visibility="collapsed"
     )
     
     if choice_option:
-        st.session_state.user_answers[current_idx] = choice_option
+        st.session_state.user_answers[q["number"]] = choice_option
     
     st.markdown("</div>", unsafe_allow_html=True)
     
