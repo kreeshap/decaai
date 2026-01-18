@@ -62,6 +62,7 @@ st.markdown("""
             padding: 1.5rem;
             border-radius: 8px;
             margin: 1rem 0;
+            color: #1f2937;
         }
         .explanation-box {
             background: #f0f9ff;
@@ -70,6 +71,15 @@ st.markdown("""
             border-radius: 8px;
             margin: 0.5rem 0;
             font-size: 0.95rem;
+            color: #1f2937;
+        }
+        .correct-answer-box {
+            background: #ecfdf5;
+            border-left: 4px solid #10b981;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 0.5rem 0;
+            color: #1f2937;
         }
         .perfect-score {
             text-align: center;
@@ -407,7 +417,7 @@ elif st.session_state.quiz_submitted:
                     st.divider()
                     
                     st.markdown(f'<div class="wrong-answer-box"><strong>Your Answer:</strong> {wrong["your_answer"]}</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div style="background: #ecfdf5; border-left: 4px solid #10b981; padding: 1rem; border-radius: 8px; margin: 0.5rem 0;"><strong>Correct Answer:</strong> {wrong["correct_answer"]}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="correct-answer-box"><strong>Correct Answer:</strong> {wrong["correct_answer"]}</div>', unsafe_allow_html=True)
                     
                     st.markdown(f'<div class="explanation-box"><strong>Explanation:</strong> {wrong["explanation"]}</div>', unsafe_allow_html=True)
         else:
