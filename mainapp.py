@@ -15,14 +15,6 @@ st.markdown("""
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             margin: 0 auto;
         }
-        .progress-header {
-            background: white;
-            color: #333;
-            padding: 1.5rem;
-            border-radius: 12px 12px 0 0;
-            text-align: center;
-            border-bottom: 1px solid #e5e7eb;
-        }
         .choice-button {
             width: 100%;
             padding: 1rem;
@@ -39,27 +31,27 @@ st.markdown("""
             background: #f9fafb;
         }
         .choice-button.selected {
-            border-color: #3b82f6;
-            background: #eff6ff;
+            border-color: #333;
+            background: #f3f4f6;
         }
         .score-card {
-            background: linear-gradient(135deg, #3b82f6 0%, #4f46e5 100%);
-            color: white;
+            background: #f3f4f6;
+            color: #333;
             padding: 2rem;
             border-radius: 12px;
             text-align: center;
             margin: 1rem 0;
         }
         .correct-card {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            color: white;
+            background: #ecfdf5;
+            color: #065f46;
             padding: 1.5rem;
             border-radius: 12px;
             text-align: center;
         }
         .incorrect-card {
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-            color: white;
+            background: #fef2f2;
+            color: #991b1b;
             padding: 1.5rem;
             border-radius: 12px;
             text-align: center;
@@ -73,7 +65,7 @@ st.markdown("""
         }
         .explanation-box {
             background: #f0f9ff;
-            border-left: 4px solid #3b82f6;
+            border-left: 4px solid #333;
             padding: 1rem;
             border-radius: 8px;
             margin: 0.5rem 0;
@@ -257,7 +249,7 @@ elif st.session_state.quiz_submitted:
     
     # Score display
     st.markdown(f"""
-        <div class="progress-header" style="border-radius: 12px;">
+        <div style="text-align: center;">
             <h1>Quiz Results</h1>
         </div>
     """, unsafe_allow_html=True)
@@ -299,14 +291,14 @@ elif st.session_state.quiz_submitted:
                 st.divider()
                 
                 st.markdown(f'<div class="wrong-answer-box"><strong>Your Answer:</strong> {wrong["your_answer"]}</div>', unsafe_allow_html=True)
-                st.markdown(f'<div style="background: #f0fdf4; border-left: 4px solid #10b981; padding: 1rem; border-radius: 8px; margin: 0.5rem 0;"><strong>Correct Answer:</strong> {wrong["correct_answer"]}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="background: #ecfdf5; border-left: 4px solid #10b981; padding: 1rem; border-radius: 8px; margin: 0.5rem 0;"><strong>Correct Answer:</strong> {wrong["correct_answer"]}</div>', unsafe_allow_html=True)
                 
                 st.markdown(f'<div class="explanation-box"><strong>Explanation:</strong> {wrong["explanation"]}</div>', unsafe_allow_html=True)
     else:
         st.markdown("""
             <div class="perfect-score">
                 <div style="font-size: 4rem;">Perfect Score!</div>
-                <h2 style="color: #10b981; margin: 1rem 0;">You got all questions correct!</h2>
+                <h2 style="color: #065f46; margin: 1rem 0;">You got all questions correct!</h2>
             </div>
         """, unsafe_allow_html=True)
     
@@ -335,7 +327,7 @@ else:
     current_idx = st.session_state.current_question
     q = questions[current_idx]
     
-    # Progress bar
+    # Progress bar only
     st.markdown(f"""
         <div style="width: 100%; background: #e5e7eb; border-radius: 10px; height: 8px; overflow: hidden; margin-bottom: 2rem;">
             <div style="width: {((current_idx + 1) / len(questions)) * 100}%; background: #333; height: 100%; border-radius: 10px;"></div>
@@ -355,7 +347,6 @@ else:
     
     for letter in ['A', 'B', 'C', 'D']:
         choice_text = q['choices'].get(letter, '')
-        is_selected = selected == letter
         
         if st.button(
             f"{letter} - {choice_text}",
