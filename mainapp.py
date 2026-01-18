@@ -232,33 +232,36 @@ def calculate_score(questions, answers):
     unanswered = 0
     
     for q in questions:
-        user_ans = answers.get(q["number"])
-        if user_ans == q["correct"]:
+        # Use a unique key for each question in the quiz (use index in quiz_questions)
+        quiz_idx = questions.index(q)
+        user_ans = answers.get(quiz_idx)
+        
+        if user_ans is None:
+            # Question was not answered
+            unanswered += 1
+            wrong.append({
+                "number": q["number"],
+                "question": q["text"],
+                "your_answer": "Not answered",
+                "correct_answer": q["correct"],
+                "explanation": q["explanation"],
+                "choice_text": q["choices"].get(q["correct"], ""),
+                "is_unanswered": True
+            })
+        elif user_ans == q["correct"]:
+            # Correct answer
             correct += 1
         else:
-            # Both unanswered and incorrect answers are marked as wrong
-            if user_ans is None:
-                unanswered += 1
-                wrong.append({
-                    "number": q["number"],
-                    "question": q["text"],
-                    "your_answer": "Not answered",
-                    "correct_answer": q["correct"],
-                    "explanation": q["explanation"],
-                    "choice_text": q["choices"].get(q["correct"], ""),
-                    "is_unanswered": True
-                })
-            else:
-                # Incorrect answer
-                wrong.append({
-                    "number": q["number"],
-                    "question": q["text"],
-                    "your_answer": user_ans,
-                    "correct_answer": q["correct"],
-                    "explanation": q["explanation"],
-                    "choice_text": q["choices"].get(q["correct"], ""),
-                    "is_unanswered": False
-                })
+            # Incorrect answer
+            wrong.append({
+                "number": q["number"],
+                "question": q["text"],
+                "your_answer": user_ans,
+                "correct_answer": q["correct"],
+                "explanation": q["explanation"],
+                "choice_text": q["choices"].get(q["correct"], ""),
+                "is_unanswered": False
+            })
     
     # Calculate score based on total questions (correct / total * 100)
     total = len(questions)
@@ -323,9 +326,11 @@ elif not st.session_state.quiz_started:
         if st.button("Start Quiz", use_container_width=True, type="primary"):
             st.session_state.start_question = start_q
             st.session_state.num_questions = num_q
-            # Filter questions for this quiz
+            # Filter questions by index position (not by question number)
             all_questions = st.session_state.questions
-            st.session_state.quiz_questions = [q for q in all_questions if start_q <= q["number"] <= start_q + num_q - 1]
+            start_idx = start_q - 1  # Convert to 0-indexed
+            end_idx = start_idx + num_q
+            st.session_state.quiz_questions = all_questions[start_idx:end_idx]
             st.session_state.quiz_submitted = False
             st.session_state.show_results = False
             st.session_state.current_question = 0
@@ -408,8 +413,9 @@ elif st.session_state.quiz_submitted:
         else:
             st.markdown("""
                 <div class="perfect-score">
-                    <div style="font-size: 4rem;">Perfect Score!</div>
-                    <h2 style="color: #065f46; margin: 1rem 0;">You got all questions correct!</h2>
+                    <div style="font-size: 4rem;">🎉</div>
+                    <h2 style="color: #065f46; margin: 1rem 0;">Perfect Score!</h2>
+                    <p>You got all questions correct!</p>
                 </div>
             """, unsafe_allow_html=True)
         
@@ -465,7 +471,7 @@ elif st.session_state.quiz_submitted:
         """, unsafe_allow_html=True)
         
         # Answer options
-        selected = st.session_state.user_answers.get(q["number"])
+        selected = st.session_state.user_answers.get(current_idx)
         
         # Get index of currently selected answer
         current_index = None
@@ -480,12 +486,12 @@ elif st.session_state.quiz_submitted:
             options=['A', 'B', 'C', 'D'],
             format_func=lambda x: f"{x} - {q['choices'].get(x, '')}",
             index=current_index,
-            key=f"choice_{q['number']}",
+            key=f"choice_{current_idx}",
             label_visibility="collapsed"
         )
         
         if choice_option:
-            st.session_state.user_answers[q["number"]] = choice_option
+            st.session_state.user_answers[current_idx] = choice_option
         
         st.markdown("</div>", unsafe_allow_html=True)
         
@@ -534,7 +540,7 @@ else:
     """, unsafe_allow_html=True)
     
     # Answer options
-    selected = st.session_state.user_answers.get(q["number"])
+    selected = st.session_state.user_answers.get(current_idx)
     
     # Get index of currently selected answer
     current_index = None
@@ -549,12 +555,12 @@ else:
         options=['A', 'B', 'C', 'D'],
         format_func=lambda x: f"{x} - {q['choices'].get(x, '')}",
         index=current_index,
-        key=f"choice_{q['number']}",
+        key=f"choice_{current_idx}",
         label_visibility="collapsed"
     )
     
     if choice_option:
-        st.session_state.user_answers[q["number"]] = choice_option
+        st.session_state.user_answers[current_idx] = choice_option
     
     st.markdown("</div>", unsafe_allow_html=True)
     
