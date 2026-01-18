@@ -89,6 +89,8 @@ if "quiz_submitted" not in st.session_state:
     st.session_state.quiz_submitted = False
 if "pdf_loaded" not in st.session_state:
     st.session_state.pdf_loaded = False
+if "show_results" not in st.session_state:
+    st.session_state.show_results = False
 
 def extract_questions_and_answers(pdf_file):
     """Extract questions and answers from PDF"""
@@ -98,6 +100,12 @@ def extract_questions_and_answers(pdf_file):
     
     with pdfplumber.open(pdf_file) as pdf:
         text = "\n".join([page.extract_text() or "" for page in pdf.pages])
+    
+    # Remove copyright notices and headers/footers
+    text = re.sub(r'Copyright.*?Columbus, Ohio', '', text, flags=re.DOTALL)
+    text = re.sub(r'Test \d+.*?EXAM.*?\n', '', text, flags=re.DOTALL)
+    text = re.sub(r'INSTRUCTIONS:.*?testing monitor\..*?\n', '', text, flags=re.DOTALL)
+    text = re.sub(r'CAUTION:.*?disqualification.*?\n', '', text, flags=re.DOTALL)
     
     # Split by "KEY" to separate questions from answer key
     parts = text.split("KEY")
@@ -109,6 +117,11 @@ def extract_questions_and_answers(pdf_file):
     i = 0
     while i < len(lines):
         line = lines[i].strip()
+        
+        # Skip empty lines and copyright/footer lines
+        if not line or 'Copyright' in line or 'Test' in line or line.startswith('Booklet'):
+            i += 1
+            continue
         
         # Check if this is a question start (format: "1. Question text?")
         match = re.match(r'^(\d+)\.\s+(.+)', line)
@@ -122,7 +135,7 @@ def extract_questions_and_answers(pdf_file):
                 next_line = lines[j].strip()
                 if re.match(r'^[A-D]\.\s', next_line):
                     break
-                if next_line and not re.match(r'^\d+\.', next_line):
+                if next_line and not re.match(r'^\d+\.', next_line) and 'Copyright' not in next_line and 'Test' not in next_line:
                     q_text += " " + next_line
                 j += 1
             
@@ -149,7 +162,7 @@ def extract_questions_and_answers(pdf_file):
                         continuation = lines[k].strip()
                         if re.match(r'^[A-D]\.\s', continuation) or re.match(r'^\d+\.', continuation):
                             break
-                        if continuation:
+                        if continuation and 'Copyright' not in continuation and 'Test' not in continuation:
                             choice_text += " " + continuation
                         k += 1
                     
@@ -172,7 +185,7 @@ def extract_questions_and_answers(pdf_file):
         
         for line in answer_lines:
             line_stripped = line.strip()
-            if not line_stripped:
+            if not line_stripped or 'Copyright' in line_stripped or 'Test' in line_stripped:
                 continue
             
             # Match answer line like "1. A"
@@ -184,7 +197,7 @@ def extract_questions_and_answers(pdf_file):
                 current_q_num = int(answer_match.group(1))
                 answer_key[current_q_num] = answer_match.group(2)
                 current_explanation = ""
-            elif current_q_num and line_stripped and not re.match(r'^\d+\.', line_stripped):
+            elif current_q_num and line_stripped and not re.match(r'^\d+\.', line_stripped) and 'Copyright' not in line_stripped:
                 # This is part of the explanation
                 if current_explanation:
                     current_explanation += " " + line_stripped
@@ -247,79 +260,161 @@ elif st.session_state.quiz_submitted:
     questions = st.session_state.questions
     score, wrong_answers = calculate_score(questions, st.session_state.user_answers)
     
-    # Score display
-    st.markdown(f"""
-        <div style="text-align: center;">
-            <h1>Quiz Results</h1>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
+    if st.session_state.show_results:
+        # Score display
         st.markdown(f"""
-            <div class="score-card">
-                <div style="font-size: 2.5rem; font-weight: bold;">{score:.1f}%</div>
-                <div style="font-size: 0.9rem; margin-top: 0.5rem;">Your Score</div>
+            <div style="text-align: center;">
+                <h1>Quiz Results</h1>
             </div>
         """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown(f"""
-            <div class="correct-card">
-                <div style="font-size: 2.5rem; font-weight: bold;">{len(questions) - len(wrong_answers)}</div>
-                <div style="font-size: 0.9rem; margin-top: 0.5rem;">Correct</div>
-            </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown(f"""
-            <div class="incorrect-card">
-                <div style="font-size: 2.5rem; font-weight: bold;">{len(wrong_answers)}</div>
-                <div style="font-size: 0.9rem; margin-top: 0.5rem;">Incorrect</div>
-            </div>
-        """, unsafe_allow_html=True)
-    
-    st.divider()
-    
-    # Wrong answers with explanations
-    if wrong_answers:
-        st.subheader("Review Your Mistakes")
         
-        for idx, wrong in enumerate(wrong_answers, 1):
-            with st.expander(f"Question {wrong['number']}: {wrong['question'][:70]}...", expanded=(idx==1 if len(wrong_answers)==1 else False)):
-                st.markdown(f"**Question {wrong['number']}:** {wrong['question']}")
-                st.divider()
-                
-                st.markdown(f'<div class="wrong-answer-box"><strong>Your Answer:</strong> {wrong["your_answer"]}</div>', unsafe_allow_html=True)
-                st.markdown(f'<div style="background: #ecfdf5; border-left: 4px solid #10b981; padding: 1rem; border-radius: 8px; margin: 0.5rem 0;"><strong>Correct Answer:</strong> {wrong["correct_answer"]}</div>', unsafe_allow_html=True)
-                
-                st.markdown(f'<div class="explanation-box"><strong>Explanation:</strong> {wrong["explanation"]}</div>', unsafe_allow_html=True)
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown(f"""
+                <div class="score-card">
+                    <div style="font-size: 2.5rem; font-weight: bold;">{score:.1f}%</div>
+                    <div style="font-size: 0.9rem; margin-top: 0.5rem;">Your Score</div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(f"""
+                <div class="correct-card">
+                    <div style="font-size: 2.5rem; font-weight: bold;">{len(questions) - len(wrong_answers)}</div>
+                    <div style="font-size: 0.9rem; margin-top: 0.5rem;">Correct</div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown(f"""
+                <div class="incorrect-card">
+                    <div style="font-size: 2.5rem; font-weight: bold;">{len(wrong_answers)}</div>
+                    <div style="font-size: 0.9rem; margin-top: 0.5rem;">Incorrect</div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        st.divider()
+        
+        # Wrong answers with explanations
+        if wrong_answers:
+            st.subheader("Review Your Mistakes")
+            
+            for idx, wrong in enumerate(wrong_answers, 1):
+                with st.expander(f"Question {wrong['number']}: {wrong['question'][:70]}...", expanded=(idx==1 if len(wrong_answers)==1 else False)):
+                    st.markdown(f"**Question {wrong['number']}:** {wrong['question']}")
+                    st.divider()
+                    
+                    st.markdown(f'<div class="wrong-answer-box"><strong>Your Answer:</strong> {wrong["your_answer"]}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="background: #ecfdf5; border-left: 4px solid #10b981; padding: 1rem; border-radius: 8px; margin: 0.5rem 0;"><strong>Correct Answer:</strong> {wrong["correct_answer"]}</div>', unsafe_allow_html=True)
+                    
+                    st.markdown(f'<div class="explanation-box"><strong>Explanation:</strong> {wrong["explanation"]}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown("""
+                <div class="perfect-score">
+                    <div style="font-size: 4rem;">Perfect Score!</div>
+                    <h2 style="color: #065f46; margin: 1rem 0;">You got all questions correct!</h2>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        st.divider()
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("Continue Quiz", use_container_width=True):
+                st.session_state.show_results = False
+                st.rerun()
+        
+        with col2:
+            if st.button("Retake Quiz", use_container_width=True):
+                st.session_state.quiz_submitted = False
+                st.session_state.user_answers = {}
+                st.session_state.current_question = 0
+                st.session_state.show_results = False
+                st.rerun()
+        
+        with col3:
+            if st.button("Upload New PDF", use_container_width=True):
+                st.session_state.pdf_loaded = False
+                st.session_state.questions = []
+                st.session_state.user_answers = {}
+                st.session_state.current_question = 0
+                st.session_state.quiz_submitted = False
+                st.session_state.show_results = False
+                st.rerun()
+    
     else:
-        st.markdown("""
-            <div class="perfect-score">
-                <div style="font-size: 4rem;">Perfect Score!</div>
-                <h2 style="color: #065f46; margin: 1rem 0;">You got all questions correct!</h2>
+        # Show quiz with results banner
+        questions = st.session_state.questions
+        current_idx = st.session_state.current_question
+        q = questions[current_idx]
+        
+        # Show current score banner
+        answered = len(st.session_state.user_answers)
+        current_score, _ = calculate_score(questions, st.session_state.user_answers)
+        st.info(f"Progress: {answered}/{len(questions)} answered | Current Score: {current_score:.1f}%")
+        
+        # Progress bar only
+        st.markdown(f"""
+            <div style="width: 100%; background: #e5e7eb; border-radius: 10px; height: 8px; overflow: hidden; margin-bottom: 2rem;">
+                <div style="width: {((current_idx + 1) / len(questions)) * 100}%; background: #333; height: 100%; border-radius: 10px;"></div>
             </div>
         """, unsafe_allow_html=True)
-    
-    st.divider()
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("Retake Quiz", use_container_width=True):
-            st.session_state.quiz_submitted = False
-            st.session_state.user_answers = {}
-            st.session_state.current_question = 0
-            st.rerun()
-    
-    with col2:
-        if st.button("Upload New PDF", use_container_width=True):
-            st.session_state.pdf_loaded = False
-            st.session_state.questions = []
-            st.session_state.user_answers = {}
-            st.session_state.current_question = 0
-            st.session_state.quiz_submitted = False
-            st.rerun()
+        
+        # Question card
+        st.markdown(f"""
+            <div class="question-card">
+                <h3 style="color: #1f2937; margin-bottom: 1.5rem; font-size: 1.2rem; line-height: 1.5;">
+                    {q['text']}
+                </h3>
+        """, unsafe_allow_html=True)
+        
+        # Answer options
+        selected = st.session_state.user_answers.get(q["number"])
+        
+        # Get index of currently selected answer
+        current_index = None
+        if selected:
+            try:
+                current_index = ['A', 'B', 'C', 'D'].index(selected)
+            except:
+                current_index = None
+        
+        choice_option = st.radio(
+            "Select your answer:",
+            options=['A', 'B', 'C', 'D'],
+            format_func=lambda x: f"{x} - {q['choices'].get(x, '')}",
+            index=current_index,
+            key=f"choice_{q['number']}",
+            label_visibility="collapsed"
+        )
+        
+        if choice_option:
+            st.session_state.user_answers[q["number"]] = choice_option
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        st.divider()
+        
+        # Navigation buttons
+        col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+        
+        with col1:
+            if st.button("Previous", use_container_width=True, disabled=(current_idx == 0)):
+                st.session_state.current_question -= 1
+                st.rerun()
+        
+        with col2:
+            st.markdown(f"<div style='text-align: center; padding: 0.5rem;'><strong>Question {current_idx + 1} out of {len(questions)}</strong></div>", unsafe_allow_html=True)
+        
+        with col3:
+            if st.button("View Results", use_container_width=True):
+                st.session_state.show_results = True
+                st.rerun()
+        
+        with col4:
+            if st.button("Next", use_container_width=True, disabled=(current_idx == len(questions) - 1)):
+                st.session_state.current_question += 1
+                st.rerun()
 
 else:
     # Quiz interface
@@ -385,6 +480,7 @@ else:
             if st.button("Submit", use_container_width=True, type="primary"):
                 if len(st.session_state.user_answers) == len(questions):
                     st.session_state.quiz_submitted = True
+                    st.session_state.show_results = True
                     st.rerun()
                 else:
                     st.error(f"Please answer all {len(questions)} questions before submitting.")
