@@ -345,16 +345,25 @@ else:
     # Answer options
     selected = st.session_state.user_answers.get(q["number"])
     
-    for letter in ['A', 'B', 'C', 'D']:
-        choice_text = q['choices'].get(letter, '')
-        
-        if st.button(
-            f"{letter} - {choice_text}",
-            key=f"choice_{q['number']}_{letter}",
-            use_container_width=True,
-        ):
-            st.session_state.user_answers[q["number"]] = letter
-            st.rerun()
+    # Get index of currently selected answer
+    current_index = None
+    if selected:
+        try:
+            current_index = ['A', 'B', 'C', 'D'].index(selected)
+        except:
+            current_index = None
+    
+    choice_option = st.radio(
+        "Select your answer:",
+        options=['A', 'B', 'C', 'D'],
+        format_func=lambda x: f"{x} - {q['choices'].get(x, '')}",
+        index=current_index,
+        key=f"choice_{q['number']}",
+        label_visibility="collapsed"
+    )
+    
+    if choice_option:
+        st.session_state.user_answers[q["number"]] = choice_option
     
     st.markdown("</div>", unsafe_allow_html=True)
     
