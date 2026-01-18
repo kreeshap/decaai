@@ -221,23 +221,41 @@ def calculate_score(questions, answers):
     """Calculate score and get wrong answers"""
     correct = 0
     wrong = []
+    unanswered = 0
     
     for q in questions:
         user_ans = answers.get(q["number"])
         if user_ans == q["correct"]:
             correct += 1
-        else:
+        elif user_ans is None:
+            # Track unanswered separately
+            unanswered += 1
             wrong.append({
                 "number": q["number"],
                 "question": q["text"],
-                "your_answer": user_ans or "Not answered",
+                "your_answer": "Not answered",
                 "correct_answer": q["correct"],
                 "explanation": q["explanation"],
-                "choice_text": q["choices"].get(q["correct"], "")
+                "choice_text": q["choices"].get(q["correct"], ""),
+                "is_unanswered": True
+            })
+        else:
+            # Incorrect answer
+            wrong.append({
+                "number": q["number"],
+                "question": q["text"],
+                "your_answer": user_ans,
+                "correct_answer": q["correct"],
+                "explanation": q["explanation"],
+                "choice_text": q["choices"].get(q["correct"], ""),
+                "is_unanswered": False
             })
     
-    score = (correct / len(questions)) * 100 if questions else 0
-    return score, wrong
+    # Calculate score based on answered questions
+    answered = len(answers)
+    score = (correct / answered * 100) if answered > 0 else 0
+    
+    return score, wrong, unanswered
 
 # Main app
 if not st.session_state.pdf_loaded:
@@ -260,7 +278,7 @@ if not st.session_state.pdf_loaded:
 
 elif st.session_state.quiz_submitted:
     questions = st.session_state.questions
-    score, wrong_answers = calculate_score(questions, st.session_state.user_answers)
+    score, wrong_answers, unanswered_count = calculate_score(questions, st.session_state.user_answers)
     
     if st.session_state.show_results:
         # Score display
@@ -270,7 +288,7 @@ elif st.session_state.quiz_submitted:
             </div>
         """, unsafe_allow_html=True)
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.markdown(f"""
                 <div class="score-card">
@@ -288,10 +306,19 @@ elif st.session_state.quiz_submitted:
             """, unsafe_allow_html=True)
         
         with col3:
+            incorrect_count = len([w for w in wrong_answers if not w.get("is_unanswered", False)])
             st.markdown(f"""
                 <div class="incorrect-card">
-                    <div style="font-size: 2.5rem; font-weight: bold;">{len(wrong_answers)}</div>
+                    <div style="font-size: 2.5rem; font-weight: bold;">{incorrect_count}</div>
                     <div style="font-size: 0.9rem; margin-top: 0.5rem;">Incorrect</div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        with col4:
+            st.markdown(f"""
+                <div style="background: #fef3c7; color: #92400e; padding: 1.5rem; border-radius: 12px; text-align: center;">
+                    <div style="font-size: 2.5rem; font-weight: bold;">{unanswered_count}</div>
+                    <div style="font-size: 0.9rem; margin-top: 0.5rem;">Unanswered</div>
                 </div>
             """, unsafe_allow_html=True)
         
@@ -352,7 +379,7 @@ elif st.session_state.quiz_submitted:
         
         # Show current score banner
         answered = len(st.session_state.user_answers)
-        current_score, _ = calculate_score(questions, st.session_state.user_answers)
+        current_score, _, _ = calculate_score(questions, st.session_state.user_answers)
         st.info(f"Progress: {answered}/{len(questions)} answered | Current Score: {current_score:.1f}%")
         
         # Progress bar only
