@@ -332,7 +332,21 @@ if not st.session_state.pdf_loaded:
             st.session_state.quiz_submitted = False
             st.session_state.current_question = 0
             st.session_state.quiz_started = False
-        st.success(f"Loaded {len(st.session_state.questions)} questions")
+        
+        # Show debug info
+        num_questions = len(st.session_state.questions)
+        num_with_answers = sum(1 for q in st.session_state.questions if q["correct"] is not None)
+        num_with_explanations = sum(1 for q in st.session_state.questions if q["explanation"] != "No explanation available.")
+        
+        st.success(f"✓ Loaded {num_questions} questions")
+        if num_with_answers < num_questions:
+            st.warning(f"⚠️ Only {num_with_answers}/{num_questions} questions have answer keys")
+        else:
+            st.success(f"✓ All {num_with_answers} questions have answer keys")
+        
+        if num_with_explanations < num_questions:
+            st.info(f"ℹ️ {num_with_explanations}/{num_questions} questions have explanations")
+        
         st.rerun()
 
 elif not st.session_state.quiz_started:
