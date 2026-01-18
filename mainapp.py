@@ -251,9 +251,9 @@ def calculate_score(questions, answers):
                 "is_unanswered": False
             })
     
-    # Calculate score based on answered questions
-    answered = len(answers)
-    score = (correct / answered * 100) if answered > 0 else 0
+    # Calculate score based on total questions (correct / total * 100)
+    total = len(questions)
+    score = (correct / total * 100) if total > 0 else 0
     
     return score, wrong, unanswered
 
