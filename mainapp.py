@@ -16,11 +16,12 @@ st.markdown("""
             margin: 0 auto;
         }
         .progress-header {
-            background: linear-gradient(135deg, #3b82f6 0%, #4f46e5 100%);
-            color: white;
+            background: white;
+            color: #333;
             padding: 1.5rem;
             border-radius: 12px 12px 0 0;
             text-align: center;
+            border-bottom: 1px solid #e5e7eb;
         }
         .choice-button {
             width: 100%;
@@ -337,9 +338,9 @@ else:
     # Header card with progress
     st.markdown(f"""
         <div class="progress-header">
-            <h2>{current_idx + 1} / {len(questions)}</h2>
-            <div style="width: 100%; background: rgba(255,255,255,0.3); border-radius: 10px; height: 8px; margin: 1rem 0; overflow: hidden;">
-                <div style="width: {((current_idx + 1) / len(questions)) * 100}%; background: white; height: 100%; border-radius: 10px;"></div>
+            <h2>Question {current_idx + 1} out of {len(questions)}</h2>
+            <div style="width: 100%; background: #e5e7eb; border-radius: 10px; height: 8px; margin: 1rem 0; overflow: hidden;">
+                <div style="width: {((current_idx + 1) / len(questions)) * 100}%; background: #333; height: 100%; border-radius: 10px;"></div>
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -380,7 +381,7 @@ else:
             st.rerun()
     
     with col2:
-        st.markdown(f"<div style='text-align: center; padding: 0.5rem;'><strong>Question {current_idx + 1}</strong></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align: center; padding: 0.5rem;'><strong>Question {current_idx + 1} out of {len(questions)}</strong></div>", unsafe_allow_html=True)
     
     with col3:
         if current_idx == len(questions) - 1:
