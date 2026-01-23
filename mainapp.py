@@ -130,6 +130,20 @@ def is_likely_noise(line):
         return True
     return False
 
+def parse_two_column_choices(line):
+    """
+    Parse choices that may be in two-column format like:
+    'A. decision. C. privacy.'
+    Returns dict of {letter: text} for all choices found on the line
+    """
+    choices = {}
+    # Pattern to match "A. text" or "A) text"
+    # We need to be careful to handle multiple choices on one line
+    parts = re.findall(r'([A-D])[\.\)]\s+([^A-D]+?)(?=\s+[A-D][\.\)]|$)', line)
+    for letter, text in parts:
+        choices[letter] = text.strip().rstrip('.')
+    return choices
+
 def find_answer_key_split(text):
     """
     Find where the answer key section starts using multiple heuristics.
@@ -140,7 +154,6 @@ def find_answer_key_split(text):
     print("="*60)
     
     # Strategy 1: Look for "KEY" in headers (most common)
-    # Pattern: Something like "EXAM—KEY", "EXAM-KEY", or just "KEY" with page numbers
     key_patterns = [
         r'EXAM[—\-\s]*KEY\s+\d+',  # EXAM—KEY 11, EXAM-KEY 11, EXAM KEY 11
         r'ANSWER\s+KEY',             # ANSWER KEY
@@ -158,25 +171,21 @@ def find_answer_key_split(text):
                     return text[:match.start()], text[match.start():]
     
     # Strategy 2: Look for sequential answer pattern "1. A\n2. B\n3. C" etc.
-    # This is characteristic of an answer key section
     answer_pattern = r'\n\s*1\.\s+[A-D]\s*\n\s*2\.\s+[A-D]\s*\n\s*3\.\s+[A-D]'
     matches = list(re.finditer(answer_pattern, text))
     if matches:
         for match in matches:
-            if match.start() > 5000:  # Reasonable amount of question text before
+            if match.start() > 5000:
                 print(f"✓ Found answer key using sequential pattern at position {match.start()}")
-                # Back up to include "1. A"
                 split_pos = text.rfind('\n', match.start()-100, match.start()) + 1
                 return text[:split_pos], text[split_pos:]
     
-    # Strategy 3: Look for a dramatic increase in question density
-    # Answer keys have many more "1. A" type lines per 1000 chars
+    # Strategy 3: Look for density increase
     chunk_size = 2000
     for i in range(5000, len(text) - chunk_size, 1000):
         chunk = text[i:i+chunk_size]
-        # Count how many "number. letter" patterns exist
         answer_like = len(re.findall(r'\n\s*\d+\.\s+[A-D]\s*\n', chunk))
-        if answer_like > 15:  # High density of answer-like patterns
+        if answer_like > 15:
             print(f"✓ Found answer key using density analysis at position {i}")
             return text[:i], text[i:]
     
@@ -245,46 +254,40 @@ def extract_questions_and_answers(pdf_file):
                 
                 j += 1
             
-            # Now extract the 4 answer choices
+            # Now extract the 4 answer choices (handling two-column format)
             choices = {}
-            expected_letters = ['A', 'B', 'C', 'D']
-            choices_found = 0
             
-            while j < len(lines) and choices_found < 4:
+            while j < len(lines) and len(choices) < 4:
                 choice_line = lines[j].strip()
                 
-                # Look for choice pattern: "A. " or "A) "
-                choice_match = re.match(r'^([A-D])[\.\)]\s+(.+)', choice_line)
+                # Check if we've moved to the next question
+                if re.match(r'^\d+[\.\)]\s+', choice_line):
+                    break
                 
-                if choice_match and choice_match.group(1) == expected_letters[choices_found]:
-                    letter = choice_match.group(1)
-                    choice_text = choice_match.group(2)
-                    
-                    # Read continuation lines for this choice
-                    k = j + 1
-                    while k < len(lines):
-                        next_line = lines[k].strip()
-                        
-                        # Stop if we hit another choice or question
-                        if re.match(r'^[A-D][\.\)]\s+', next_line):
-                            break
-                        if re.match(r'^\d+[\.\)]\s+', next_line):
-                            break
-                        
-                        # Add non-noise lines to choice text
-                        if next_line and not is_likely_noise(next_line):
-                            choice_text += " " + next_line
-                        
-                        k += 1
-                    
-                    choices[letter] = choice_text.strip()
-                    choices_found += 1
-                    j = k
+                # Skip noise
+                if is_likely_noise(choice_line):
+                    j += 1
+                    continue
+                
+                # Try to parse choices from this line (handles two-column format)
+                line_choices = parse_two_column_choices(choice_line)
+                
+                if line_choices:
+                    # Add any new choices we found
+                    for letter, text in line_choices.items():
+                        if letter not in choices:
+                            choices[letter] = text
+                    j += 1
                 else:
+                    # This might be a continuation of the previous choice
+                    if choices and not re.match(r'^[A-D][\.\)]\s+', choice_line):
+                        # Add to the last choice
+                        last_letter = list(choices.keys())[-1]
+                        choices[last_letter] += " " + choice_line
                     j += 1
             
             # Only save question if we found all 4 choices
-            if len(choices) == 4:
+            if len(choices) == 4 and all(letter in choices for letter in ['A', 'B', 'C', 'D']):
                 questions.append({
                     "number": q_num,
                     "text": q_text.strip(),
@@ -297,8 +300,7 @@ def extract_questions_and_answers(pdf_file):
                 if len(questions) <= 5 or len(questions) % 25 == 0:
                     print(f"  Q{q_num}: {q_text[:60]}...")
             else:
-                if choices:  # Only log if we found some but not all choices
-                    print(f"  ⚠ Q{q_num}: Found only {len(choices)}/4 choices - skipping")
+                print(f"  ⚠ Q{q_num}: Found only {len(choices)}/4 choices - skipping. Choices: {list(choices.keys())}")
             
             i = j
         else:
