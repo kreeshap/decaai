@@ -137,11 +137,19 @@ def parse_two_column_choices(line):
     Returns dict of {letter: text} for all choices found on the line
     """
     choices = {}
-    # Pattern to match "A. text" or "A) text"
-    # We need to be careful to handle multiple choices on one line
-    parts = re.findall(r'([A-D])[\.\)]\s+([^A-D]+?)(?=\s+[A-D][\.\)]|$)', line)
-    for letter, text in parts:
-        choices[letter] = text.strip().rstrip('.')
+    # Split by the letter patterns, which gives us alternating letters and text
+    pattern = r'([A-D])[\.\)]\s+'
+    parts = re.split(pattern, line)
+    
+    # After split: ['', 'A', 'text', 'C', 'more text', ...]
+    # or: ['some text', 'A', 'text', 'C', 'more text', ...]
+    for i in range(1, len(parts), 2):
+        if i+1 < len(parts):
+            letter = parts[i]
+            text = parts[i+1].strip().rstrip('.')
+            if text:  # Only add if there's actual text
+                choices[letter] = text
+    
     return choices
 
 def find_answer_key_split(text):
@@ -280,9 +288,9 @@ def extract_questions_and_answers(pdf_file):
                     j += 1
                 else:
                     # This might be a continuation of the previous choice
-                    if choices and not re.match(r'^[A-D][\.\)]\s+', choice_line):
+                    if choices and choice_line and not re.match(r'^[A-D][\.\)]\s+', choice_line):
                         # Add to the last choice
-                        last_letter = list(choices.keys())[-1]
+                        last_letter = sorted(choices.keys())[-1]
                         choices[last_letter] += " " + choice_line
                     j += 1
             
