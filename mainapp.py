@@ -110,212 +110,278 @@ if "num_questions" not in st.session_state:
 if "quiz_questions" not in st.session_state:
     st.session_state.quiz_questions = []
 
+def is_likely_noise(line):
+    """Check if a line is likely noise (headers, footers, page numbers, etc.)"""
+    line = line.strip()
+    if not line:
+        return True
+    if len(line) < 3:  # Very short lines are likely noise
+        return True
+    if line.startswith('Copyright'):
+        return True
+    if line.startswith('Posted online'):
+        return True
+    if line.startswith('Booklet'):
+        return True
+    if re.match(r'^Page\s+\d+', line, re.IGNORECASE):
+        return True
+    # Header patterns like "Test 1229 FINANCE EXAM 1"
+    if re.match(r'^Test\s+\d+.*EXAM\s+\d+$', line) and 'KEY' not in line:
+        return True
+    return False
+
+def find_answer_key_split(text):
+    """
+    Find where the answer key section starts using multiple heuristics.
+    Returns (questions_text, answer_text) tuple
+    """
+    print("\n" + "="*60)
+    print("Attempting to locate answer key section...")
+    print("="*60)
+    
+    # Strategy 1: Look for "KEY" in headers (most common)
+    # Pattern: Something like "EXAM—KEY", "EXAM-KEY", or just "KEY" with page numbers
+    key_patterns = [
+        r'EXAM[—\-\s]*KEY\s+\d+',  # EXAM—KEY 11, EXAM-KEY 11, EXAM KEY 11
+        r'ANSWER\s+KEY',             # ANSWER KEY
+        r'\bKEY\b.*\d+',            # KEY followed by page number
+    ]
+    
+    for pattern in key_patterns:
+        matches = list(re.finditer(pattern, text, re.IGNORECASE))
+        if matches:
+            # Use the first match that appears after substantial content
+            for match in matches:
+                if match.start() > 5000:  # At least 5000 chars of questions
+                    print(f"✓ Found answer key using pattern '{pattern}' at position {match.start()}")
+                    print(f"  Context: ...{text[match.start()-20:match.start()+50]}...")
+                    return text[:match.start()], text[match.start():]
+    
+    # Strategy 2: Look for sequential answer pattern "1. A\n2. B\n3. C" etc.
+    # This is characteristic of an answer key section
+    answer_pattern = r'\n\s*1\.\s+[A-D]\s*\n\s*2\.\s+[A-D]\s*\n\s*3\.\s+[A-D]'
+    matches = list(re.finditer(answer_pattern, text))
+    if matches:
+        for match in matches:
+            if match.start() > 5000:  # Reasonable amount of question text before
+                print(f"✓ Found answer key using sequential pattern at position {match.start()}")
+                # Back up to include "1. A"
+                split_pos = text.rfind('\n', match.start()-100, match.start()) + 1
+                return text[:split_pos], text[split_pos:]
+    
+    # Strategy 3: Look for a dramatic increase in question density
+    # Answer keys have many more "1. A" type lines per 1000 chars
+    chunk_size = 2000
+    for i in range(5000, len(text) - chunk_size, 1000):
+        chunk = text[i:i+chunk_size]
+        # Count how many "number. letter" patterns exist
+        answer_like = len(re.findall(r'\n\s*\d+\.\s+[A-D]\s*\n', chunk))
+        if answer_like > 15:  # High density of answer-like patterns
+            print(f"✓ Found answer key using density analysis at position {i}")
+            return text[:i], text[i:]
+    
+    print("⚠ Could not locate answer key section - will parse entire document as questions")
+    return text, ""
+
 def extract_questions_and_answers(pdf_file):
-    """Extract questions and answers from PDF with improved parsing"""
+    """Universal PDF parser that works with any DECA exam format"""
     questions = []
     answer_key = {}
     explanations = {}
     
+    # Extract text from PDF
     with pdfplumber.open(pdf_file) as pdf:
         text = "\n".join([page.extract_text() or "" for page in pdf.pages])
     
-    print(f"Total text length: {len(text)} characters")
+    print(f"\n{'='*60}")
+    print(f"PARSING PDF")
+    print(f"{'='*60}")
+    print(f"Total text length: {len(text):,} characters")
     
-    # Improved splitting: Look for the answer key section more carefully
-    # The answer key typically starts with "EXAM—KEY" or "EXAM-KEY" followed by a page number
-    # We want to find the LAST occurrence or look for it in a more specific way
+    # Split into questions and answers sections
+    questions_text, answer_text = find_answer_key_split(text)
     
-    # Split by looking for answer key header that appears AFTER all questions
-    # Strategy: Find where questions end by looking for the pattern more carefully
+    print(f"\nQuestions section: {len(questions_text):,} characters")
+    print(f"Answer section: {len(answer_text):,} characters")
+    print(f"\n{'='*60}")
+    print("PARSING QUESTIONS")
+    print(f"{'='*60}\n")
     
-    # First, let's try to find all occurrences of the key marker
-    key_pattern = r'(?:EXAM[—\-]KEY|Test\s+\d+\s+FINANCE\s+CLUSTER\s+EXAM[—\-]KEY)\s+\d+'
-    key_matches = list(re.finditer(key_pattern, text))
-    
-    if key_matches:
-        # Use the first match that appears after a substantial amount of content
-        # (questions should be in the first part)
-        for match in key_matches:
-            if match.start() > 5000:  # Arbitrary threshold - questions section should be substantial
-                questions_text = text[:match.start()]
-                answer_text = text[match.start():]
-                print(f"Found answer key at position {match.start()}")
-                break
-        else:
-            # If no match found after threshold, use the last match
-            questions_text = text[:key_matches[-1].start()]
-            answer_text = text[key_matches[-1].start():]
-            print(f"Using last key match at position {key_matches[-1].start()}")
-    else:
-        # Fallback: try splitting by "KEY"
-        parts = text.split("KEY")
-        questions_text = parts[0] if len(parts) > 0 else text
-        answer_text = parts[1] if len(parts) > 1 else ""
-        print(f"Using fallback KEY split, found {len(parts)} parts")
-    
-    print(f"Questions text length: {len(questions_text)}")
-    print(f"Answer text length: {len(answer_text)}")
-    
+    # Parse questions section
     lines = questions_text.split('\n')
-    
     i = 0
-    current_q = None
     
     while i < len(lines):
         line = lines[i].strip()
         
-        # Skip header/footer lines
-        if not line or line.startswith('Copyright') or \
-           (line.startswith('Test') and 'EXAM' in line) or \
-           line.startswith('Booklet') or line.startswith('Posted online'):
+        # Skip noise
+        if is_likely_noise(line):
             i += 1
             continue
         
-        # Check if this is a question start (format: "1. Question text?")
-        match = re.match(r'^(\d+)\.\s+(.+)', line)
-        if match:
-            # Save previous question if exists
-            if current_q and current_q["choices"] and len(current_q["choices"]) == 4:
-                questions.append(current_q)
+        # Look for question start: "1. " or "1) " with text after
+        question_match = re.match(r'^(\d+)[\.\)]\s+(.+)', line)
+        
+        if question_match:
+            q_num = int(question_match.group(1))
+            q_text = question_match.group(2)
             
-            q_num = int(match.group(1))
-            q_text = match.group(2)
-            
-            # Collect full question text (may span multiple lines)
+            # Read continuation lines for the question
             j = i + 1
             while j < len(lines):
                 next_line = lines[j].strip()
-                # Stop if we hit a choice or another question
-                if re.match(r'^[A-D]\.\s', next_line) or re.match(r'^\d+\.', next_line):
+                
+                # Stop if we hit an answer choice
+                if re.match(r'^[A-D][\.\)]\s+', next_line):
                     break
-                if next_line and not (next_line.startswith('Copyright') or 
-                                     (next_line.startswith('Test') and 'EXAM' in next_line)):
+                
+                # Stop if we hit another question number
+                if re.match(r'^\d+[\.\)]\s+', next_line):
+                    break
+                
+                # Add non-noise lines to question text
+                if next_line and not is_likely_noise(next_line):
                     q_text += " " + next_line
+                
                 j += 1
             
-            current_q = {
-                "number": q_num,
-                "text": q_text.strip(),
-                "choices": {},
-                "correct": None,
-                "explanation": ""
-            }
+            # Now extract the 4 answer choices
+            choices = {}
+            expected_letters = ['A', 'B', 'C', 'D']
+            choices_found = 0
             
-            # Extract choices for this question
-            choice_count = 0
-            while j < len(lines) and choice_count < 4:
+            while j < len(lines) and choices_found < 4:
                 choice_line = lines[j].strip()
-                choice_match = re.match(r'^([A-D])\.\s+(.+)', choice_line)
-                if choice_match:
-                    choice_letter = choice_match.group(1)
+                
+                # Look for choice pattern: "A. " or "A) "
+                choice_match = re.match(r'^([A-D])[\.\)]\s+(.+)', choice_line)
+                
+                if choice_match and choice_match.group(1) == expected_letters[choices_found]:
+                    letter = choice_match.group(1)
                     choice_text = choice_match.group(2)
                     
-                    # Collect multi-line choices
+                    # Read continuation lines for this choice
                     k = j + 1
                     while k < len(lines):
-                        continuation = lines[k].strip()
-                        # Stop if we hit another choice, question, or specific markers
-                        if re.match(r'^[A-D]\.\s', continuation) or re.match(r'^\d+\.', continuation):
+                        next_line = lines[k].strip()
+                        
+                        # Stop if we hit another choice or question
+                        if re.match(r'^[A-D][\.\)]\s+', next_line):
                             break
-                        if continuation and not (continuation.startswith('Copyright') or 
-                                                (continuation.startswith('Test') and 'EXAM' in continuation)):
-                            choice_text += " " + continuation
+                        if re.match(r'^\d+[\.\)]\s+', next_line):
+                            break
+                        
+                        # Add non-noise lines to choice text
+                        if next_line and not is_likely_noise(next_line):
+                            choice_text += " " + next_line
+                        
                         k += 1
                     
-                    current_q["choices"][choice_letter] = choice_text.strip()
-                    choice_count += 1
+                    choices[letter] = choice_text.strip()
+                    choices_found += 1
                     j = k
                 else:
                     j += 1
+            
+            # Only save question if we found all 4 choices
+            if len(choices) == 4:
+                questions.append({
+                    "number": q_num,
+                    "text": q_text.strip(),
+                    "choices": choices,
+                    "correct": None,
+                    "explanation": ""
+                })
+                
+                # Progress logging
+                if len(questions) <= 5 or len(questions) % 25 == 0:
+                    print(f"  Q{q_num}: {q_text[:60]}...")
+            else:
+                if choices:  # Only log if we found some but not all choices
+                    print(f"  ⚠ Q{q_num}: Found only {len(choices)}/4 choices - skipping")
             
             i = j
         else:
             i += 1
     
-    # Don't forget the last question
-    if current_q and current_q["choices"] and len(current_q["choices"]) == 4:
-        questions.append(current_q)
+    print(f"\n✓ Extracted {len(questions)} complete questions")
     
-    print(f"✓ Extracted {len(questions)} questions from text")
-    
-    # Extract answer key and explanations
+    # Parse answer key section
     if answer_text:
+        print(f"\n{'='*60}")
+        print("PARSING ANSWER KEY")
+        print(f"{'='*60}\n")
+        
         answer_lines = answer_text.split('\n')
         current_q_num = None
         current_explanation = ""
-        skip_until_next_question = False
+        in_source_section = False
         
         for line in answer_lines:
             line_stripped = line.strip()
-            if not line_stripped:
+            
+            if not line_stripped or is_likely_noise(line_stripped):
                 continue
             
-            # Skip copyright/footer/header lines
-            if (line_stripped.startswith('Copyright') or 
-                (line_stripped.startswith('Test') and 'EXAM' in line_stripped) or
-                line_stripped.startswith('Posted online')):
-                continue
-            
-            # Skip SOURCE lines completely
+            # Skip SOURCE: sections (common in DECA exams)
             if line_stripped.startswith('SOURCE:'):
-                skip_until_next_question = True
+                in_source_section = True
                 continue
             
-            # If we're in a SOURCE section, skip until we hit a new question number
-            if skip_until_next_question:
-                # Check if this is a new question
-                if re.match(r'^\d+\.\s+[A-D]', line_stripped):
-                    skip_until_next_question = False
-                else:
-                    continue
+            # Look for answer pattern: "1. A" or "1. B Some explanation"
+            answer_match = re.match(r'^(\d+)[\.\)]\s+([A-D])(?:\s+(.*))?$', line_stripped)
             
-            # Match answer line - capture answer and any text after it
-            answer_match = re.match(r'^(\d+)\.\s+([A-D])(?:\s+(.*))?$', line_stripped)
             if answer_match:
-                # Save previous explanation before starting new one
-                if current_q_num is not None and current_explanation:
+                # Save previous explanation
+                if current_q_num and current_explanation:
                     explanations[current_q_num] = current_explanation.strip()
                 
                 current_q_num = int(answer_match.group(1))
                 answer_key[current_q_num] = answer_match.group(2)
                 
-                # Start explanation with any text on the same line as the answer
+                # Start new explanation
                 explanation_start = answer_match.group(3)
                 current_explanation = explanation_start if explanation_start else ""
-                skip_until_next_question = False
-            elif current_q_num is not None and line_stripped and not skip_until_next_question:
-                # Check if this is a new answer line
-                if not re.match(r'^\d+\.\s+[A-D]', line_stripped):
-                    # This is part of the explanation
+                in_source_section = False
+                
+                # Progress logging
+                if len(answer_key) <= 5 or len(answer_key) % 25 == 0:
+                    print(f"  Q{current_q_num}: {answer_key[current_q_num]}")
+            
+            elif current_q_num and not in_source_section:
+                # Continue building explanation
+                if not re.match(r'^\d+[\.\)]\s+[A-D]', line_stripped):
                     if current_explanation:
                         current_explanation += " " + line_stripped
                     else:
                         current_explanation = line_stripped
         
-        # Don't forget the last explanation
-        if current_q_num is not None and current_explanation:
+        # Save last explanation
+        if current_q_num and current_explanation:
             explanations[current_q_num] = current_explanation.strip()
-    
-    # Debug: Print what we found
-    print(f"✓ Found {len(questions)} questions")
-    print(f"✓ Found {len(answer_key)} answers in key")
-    print(f"✓ Found {len(explanations)} explanations")
-    
-    # Print sample of question numbers found
-    if questions:
-        q_numbers = [q["number"] for q in questions]
-        print(f"Question numbers range: {min(q_numbers)} to {max(q_numbers)}")
-        print(f"First 10 questions: {q_numbers[:10]}")
-        print(f"Last 10 questions: {q_numbers[-10:]}")
-    
-    if len(answer_key) > 0:
-        print(f"Sample answers: Q1={answer_key.get(1)}, Q2={answer_key.get(2)}, Q3={answer_key.get(3)}")
-        print(f"Answer key numbers range: {min(answer_key.keys())} to {max(answer_key.keys())}")
+        
+        print(f"\n✓ Extracted {len(answer_key)} answers")
+        print(f"✓ Extracted {len(explanations)} explanations")
     
     # Assign answers and explanations to questions
     for q in questions:
-        q["correct"] = answer_key.get(q["number"], None)
+        q["correct"] = answer_key.get(q["number"])
         q["explanation"] = explanations.get(q["number"], "No explanation available.")
+    
+    # Final summary
+    if questions:
+        q_numbers = [q["number"] for q in questions]
+        with_answers = sum(1 for q in questions if q["correct"])
+        with_explanations = sum(1 for q in questions if q["explanation"] != "No explanation available.")
+        
+        print(f"\n{'='*60}")
+        print("PARSING COMPLETE")
+        print(f"{'='*60}")
+        print(f"Total questions: {len(questions)}")
+        print(f"Question range: Q{min(q_numbers)} to Q{max(q_numbers)}")
+        print(f"With answer keys: {with_answers}/{len(questions)}")
+        print(f"With explanations: {with_explanations}/{len(questions)}")
+        print(f"{'='*60}\n")
     
     return questions
 
@@ -379,7 +445,7 @@ if not st.session_state.pdf_loaded:
             st.session_state.current_question = 0
             st.session_state.quiz_started = False
         
-        # Show debug info
+        # Show summary
         num_questions = len(st.session_state.questions)
         num_with_answers = sum(1 for q in st.session_state.questions if q["correct"] is not None)
         num_with_explanations = sum(1 for q in st.session_state.questions if q["explanation"] != "No explanation available.")
@@ -426,7 +492,7 @@ elif not st.session_state.quiz_started:
             "Number of questions:",
             min_value=1,
             max_value=total_questions - start_q + 1,
-            value=min(100, total_questions - start_q + 1),  # Changed from 10 to 100
+            value=min(100, total_questions - start_q + 1),
             step=1
         )
     
