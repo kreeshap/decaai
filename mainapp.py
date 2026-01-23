@@ -374,7 +374,7 @@ elif not st.session_state.quiz_started:
             "Number of questions:",
             min_value=1,
             max_value=total_questions - start_q + 1,
-            value=min(10, total_questions - start_q + 1),
+            value=min(100, total_questions - start_q + 1),
             step=1
         )
     
