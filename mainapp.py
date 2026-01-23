@@ -111,7 +111,7 @@ if "quiz_questions" not in st.session_state:
     st.session_state.quiz_questions = []
 
 def extract_questions_and_answers(pdf_file):
-    """Extract questions and answers from PDF"""
+    """Extract questions and answers from PDF with improved parsing"""
     questions = []
     answer_key = {}
     explanations = {}
@@ -119,15 +119,33 @@ def extract_questions_and_answers(pdf_file):
     with pdfplumber.open(pdf_file) as pdf:
         text = "\n".join([page.extract_text() or "" for page in pdf.pages])
     
-    # Split by looking for the answer key section
-    # The answer key appears on pages with "EXAM—KEY" or "EXAM-KEY" in the header
-    key_match = re.search(r'EXAM[—\-]KEY\s+\d+', text)
+    print(f"Total text length: {len(text)} characters")
     
-    if key_match:
-        # Split at the first occurrence of EXAM—KEY or EXAM-KEY
-        questions_text = text[:key_match.start()]
-        answer_text = text[key_match.start():]
-        print(f"Found answer key at position {key_match.start()}")
+    # Improved splitting: Look for the answer key section more carefully
+    # The answer key typically starts with "EXAM—KEY" or "EXAM-KEY" followed by a page number
+    # We want to find the LAST occurrence or look for it in a more specific way
+    
+    # Split by looking for answer key header that appears AFTER all questions
+    # Strategy: Find where questions end by looking for the pattern more carefully
+    
+    # First, let's try to find all occurrences of the key marker
+    key_pattern = r'(?:EXAM[—\-]KEY|Test\s+\d+\s+FINANCE\s+CLUSTER\s+EXAM[—\-]KEY)\s+\d+'
+    key_matches = list(re.finditer(key_pattern, text))
+    
+    if key_matches:
+        # Use the first match that appears after a substantial amount of content
+        # (questions should be in the first part)
+        for match in key_matches:
+            if match.start() > 5000:  # Arbitrary threshold - questions section should be substantial
+                questions_text = text[:match.start()]
+                answer_text = text[match.start():]
+                print(f"Found answer key at position {match.start()}")
+                break
+        else:
+            # If no match found after threshold, use the last match
+            questions_text = text[:key_matches[-1].start()]
+            answer_text = text[key_matches[-1].start():]
+            print(f"Using last key match at position {key_matches[-1].start()}")
     else:
         # Fallback: try splitting by "KEY"
         parts = text.split("KEY")
@@ -135,20 +153,31 @@ def extract_questions_and_answers(pdf_file):
         answer_text = parts[1] if len(parts) > 1 else ""
         print(f"Using fallback KEY split, found {len(parts)} parts")
     
+    print(f"Questions text length: {len(questions_text)}")
+    print(f"Answer text length: {len(answer_text)}")
+    
     lines = questions_text.split('\n')
     
     i = 0
+    current_q = None
+    
     while i < len(lines):
         line = lines[i].strip()
         
-        # Skip lines that are purely copyright/footer info
-        if not line or line.startswith('Copyright') or (line.startswith('Test') and 'EXAM' in line) or line.startswith('Booklet'):
+        # Skip header/footer lines
+        if not line or line.startswith('Copyright') or \
+           (line.startswith('Test') and 'EXAM' in line) or \
+           line.startswith('Booklet') or line.startswith('Posted online'):
             i += 1
             continue
         
         # Check if this is a question start (format: "1. Question text?")
         match = re.match(r'^(\d+)\.\s+(.+)', line)
         if match:
+            # Save previous question if exists
+            if current_q and current_q["choices"] and len(current_q["choices"]) == 4:
+                questions.append(current_q)
+            
             q_num = int(match.group(1))
             q_text = match.group(2)
             
@@ -156,11 +185,12 @@ def extract_questions_and_answers(pdf_file):
             j = i + 1
             while j < len(lines):
                 next_line = lines[j].strip()
-                if re.match(r'^[A-D]\.\s', next_line):
+                # Stop if we hit a choice or another question
+                if re.match(r'^[A-D]\.\s', next_line) or re.match(r'^\d+\.', next_line):
                     break
-                if next_line and not re.match(r'^\d+\.', next_line):
-                    if not (next_line.startswith('Copyright') or (next_line.startswith('Test') and 'EXAM' in next_line)):
-                        q_text += " " + next_line
+                if next_line and not (next_line.startswith('Copyright') or 
+                                     (next_line.startswith('Test') and 'EXAM' in next_line)):
+                    q_text += " " + next_line
                 j += 1
             
             current_q = {
@@ -184,23 +214,29 @@ def extract_questions_and_answers(pdf_file):
                     k = j + 1
                     while k < len(lines):
                         continuation = lines[k].strip()
+                        # Stop if we hit another choice, question, or specific markers
                         if re.match(r'^[A-D]\.\s', continuation) or re.match(r'^\d+\.', continuation):
                             break
-                        if continuation:
-                            if not (continuation.startswith('Copyright') or (continuation.startswith('Test') and 'EXAM' in continuation)):
-                                choice_text += " " + continuation
+                        if continuation and not (continuation.startswith('Copyright') or 
+                                                (continuation.startswith('Test') and 'EXAM' in continuation)):
+                            choice_text += " " + continuation
                         k += 1
                     
                     current_q["choices"][choice_letter] = choice_text.strip()
                     choice_count += 1
                     j = k
                 else:
-                    break
+                    j += 1
             
-            if current_q["choices"] and len(current_q["choices"]) == 4:
-                questions.append(current_q)
-        
-        i += 1
+            i = j
+        else:
+            i += 1
+    
+    # Don't forget the last question
+    if current_q and current_q["choices"] and len(current_q["choices"]) == 4:
+        questions.append(current_q)
+    
+    print(f"✓ Extracted {len(questions)} questions from text")
     
     # Extract answer key and explanations
     if answer_text:
@@ -216,7 +252,8 @@ def extract_questions_and_answers(pdf_file):
             
             # Skip copyright/footer/header lines
             if (line_stripped.startswith('Copyright') or 
-                (line_stripped.startswith('Test') and 'EXAM' in line_stripped)):
+                (line_stripped.startswith('Test') and 'EXAM' in line_stripped) or
+                line_stripped.startswith('Posted online')):
                 continue
             
             # Skip SOURCE lines completely
@@ -263,8 +300,17 @@ def extract_questions_and_answers(pdf_file):
     print(f"✓ Found {len(questions)} questions")
     print(f"✓ Found {len(answer_key)} answers in key")
     print(f"✓ Found {len(explanations)} explanations")
+    
+    # Print sample of question numbers found
+    if questions:
+        q_numbers = [q["number"] for q in questions]
+        print(f"Question numbers range: {min(q_numbers)} to {max(q_numbers)}")
+        print(f"First 10 questions: {q_numbers[:10]}")
+        print(f"Last 10 questions: {q_numbers[-10:]}")
+    
     if len(answer_key) > 0:
         print(f"Sample answers: Q1={answer_key.get(1)}, Q2={answer_key.get(2)}, Q3={answer_key.get(3)}")
+        print(f"Answer key numbers range: {min(answer_key.keys())} to {max(answer_key.keys())}")
     
     # Assign answers and explanations to questions
     for q in questions:
@@ -339,8 +385,14 @@ if not st.session_state.pdf_loaded:
         num_with_explanations = sum(1 for q in st.session_state.questions if q["explanation"] != "No explanation available.")
         
         st.success(f"✓ Loaded {num_questions} questions")
+        
+        # Show question number distribution
+        if num_questions > 0:
+            q_numbers = [q["number"] for q in st.session_state.questions]
+            st.info(f"📊 Questions range from #{min(q_numbers)} to #{max(q_numbers)}")
+        
         if num_with_answers < num_questions:
-            st.warning(f" Only {num_with_answers}/{num_questions} questions have answer keys")
+            st.warning(f"⚠ Only {num_with_answers}/{num_questions} questions have answer keys")
         else:
             st.success(f"✓ All {num_with_answers} questions have answer keys")
         
@@ -374,7 +426,7 @@ elif not st.session_state.quiz_started:
             "Number of questions:",
             min_value=1,
             max_value=total_questions - start_q + 1,
-            value=min(100, total_questions - start_q + 1),
+            value=min(100, total_questions - start_q + 1),  # Changed from 10 to 100
             step=1
         )
     
